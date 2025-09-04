@@ -54,7 +54,7 @@ export async function askLLM({ question, context }: { question: string; context:
           "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000)
       }
     ],
-    max_tokens: MAX_TOKENS,
+    max_completion_tokens: MAX_TOKENS,
     temperature: 0.2
   });
   return resp.choices?.[0]?.message?.content || "";
