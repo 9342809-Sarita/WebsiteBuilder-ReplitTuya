@@ -4,7 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, RotateCcw, Download, Home, Play, Pause, Thermometer, Lightbulb, Zap, Gauge, History, Clock, Calendar } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { X, RotateCcw, Download, Home, Play, Pause, Thermometer, Lightbulb, Zap, Gauge, History, Clock, Calendar, TrendingUp, Filter, BarChart3 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { getDeviceHistory } from "@/lib/api";
 import type { TuyaDevice, TuyaDeviceStatus } from "@/lib/api";
 
@@ -30,6 +32,8 @@ export function DeviceStatusPanel({
   const [historyData, setHistoryData] = useState<any>(null);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [activeTab, setActiveTab] = useState("current");
+  const [historyFilter, setHistoryFilter] = useState("all");
+  const [historyView, setHistoryView] = useState<"timeline" | "charts">("timeline");
   
   const deviceId = device.id || device.device_id || "";
   const deviceName = device.name || "Unknown Device";
@@ -110,8 +114,85 @@ export function DeviceStatusPanel({
   const getHistoryLogs = () => {
     if (isLoadingHistory || !historyData) return [];
     
-    const logs = historyData?.result?.logs || historyData?.result || [];
-    return Array.isArray(logs) ? logs.map(formatHistoryEvent) : [];
+    let logs = historyData?.result?.logs || historyData?.result || [];
+    logs = Array.isArray(logs) ? logs.map(formatHistoryEvent) : [];
+    
+    // Apply filter
+    if (historyFilter !== "all") {
+      logs = logs.filter((log: any) => {
+        const code = log.code?.toLowerCase() || "";
+        switch (historyFilter) {
+          case "switch":
+            return code.includes("switch") || typeof log.value === "boolean";
+          case "sensor":
+            return code.includes("temp") || code.includes("humidity") || code.includes("bright");
+          case "power":
+            return code.includes("power") || code.includes("current") || code.includes("voltage");
+          default:
+            return true;
+        }
+      });
+    }
+    
+    return logs;
+  };
+  
+  const getUniqueDataTypes = () => {
+    const logs = getHistoryLogs();
+    const types = new Set();
+    
+    logs.forEach((log: any) => {
+      const code = log.code?.toLowerCase() || "";
+      if (code.includes("switch") || typeof log.value === "boolean") types.add("switch");
+      if (code.includes("temp") || code.includes("humidity") || code.includes("bright")) types.add("sensor");
+      if (code.includes("power") || code.includes("current") || code.includes("voltage")) types.add("power");
+    });
+    
+    return Array.from(types);
+  };
+  
+  const getChartData = () => {
+    const logs = getHistoryLogs();
+    const numericLogs = logs.filter((log: any) => typeof log.value === "number");
+    
+    // Group by data point code
+    const groupedData: { [key: string]: any[] } = {};
+    
+    numericLogs.forEach((log: any) => {
+      if (!groupedData[log.code]) {
+        groupedData[log.code] = [];
+      }
+      
+      groupedData[log.code].push({
+        timestamp: log.event_time,
+        time: new Date(log.event_time).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }),
+        value: log.value,
+        displayValue: log.displayValue
+      });
+    });
+    
+    return groupedData;
+  };
+  
+  const getEventSummary = () => {
+    const logs = getHistoryLogs();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const todayEvents = logs.filter((log: any) => new Date(log.event_time) >= today);
+    const switchEvents = logs.filter((log: any) => typeof log.value === "boolean");
+    const sensorReadings = logs.filter((log: any) => typeof log.value === "number");
+    
+    return {
+      total: logs.length,
+      today: todayEvents.length,
+      switches: switchEvents.length,
+      sensors: sensorReadings.length
+    };
   };
 
   const getDataPoints = () => {
@@ -319,81 +400,260 @@ export function DeviceStatusPanel({
             </TabsContent>
             
             <TabsContent value="history" className="mt-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-6">
+                {/* Summary Cards */}
+                {historyData && !isLoadingHistory && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {(() => {
+                      const summary = getEventSummary();
+                      return (
+                        <>
+                          <Card className="p-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-primary">{summary.total}</div>
+                              <div className="text-xs text-muted-foreground">Total Events</div>
+                            </div>
+                          </Card>
+                          <Card className="p-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-green-600">{summary.today}</div>
+                              <div className="text-xs text-muted-foreground">Today</div>
+                            </div>
+                          </Card>
+                          <Card className="p-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-blue-600">{summary.switches}</div>
+                              <div className="text-xs text-muted-foreground">Switches</div>
+                            </div>
+                          </Card>
+                          <Card className="p-3">
+                            <div className="text-center">
+                              <div className="text-2xl font-bold text-orange-600">{summary.sensors}</div>
+                              <div className="text-xs text-muted-foreground">Sensors</div>
+                            </div>
+                          </Card>
+                        </>
+                      );
+                    })()
+                    }
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between flex-wrap gap-3">
                   <h4 className="text-sm font-medium text-foreground">Device History (Last 7 days)</h4>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => {
-                      setHistoryData(null);
-                      loadHistory();
-                    }}
-                    disabled={isLoadingHistory}
-                  >
-                    <RotateCcw className={`h-3 w-3 mr-1 ${isLoadingHistory ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
+                  <div className="flex items-center space-x-3">
+                    <Select value={historyFilter} onValueChange={setHistoryFilter}>
+                      <SelectTrigger className="w-32">
+                        <Filter className="h-3 w-3 mr-1" />
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Events</SelectItem>
+                        <SelectItem value="switch">Switches</SelectItem>
+                        <SelectItem value="sensor">Sensors</SelectItem>
+                        <SelectItem value="power">Power</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    <div className="flex border rounded-md">
+                      <Button
+                        variant={historyView === "timeline" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setHistoryView("timeline")}
+                        className="rounded-r-none border-r"
+                      >
+                        <History className="h-3 w-3 mr-1" />
+                        Timeline
+                      </Button>
+                      <Button
+                        variant={historyView === "charts" ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setHistoryView("charts")}
+                        className="rounded-l-none"
+                      >
+                        <BarChart3 className="h-3 w-3 mr-1" />
+                        Charts
+                      </Button>
+                    </div>
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        setHistoryData(null);
+                        loadHistory();
+                      }}
+                      disabled={isLoadingHistory}
+                    >
+                      <RotateCcw className={`h-3 w-3 mr-1 ${isLoadingHistory ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
                 </div>
                 
-                <div className="bg-muted/30 rounded-lg p-4 max-h-96 overflow-auto">
-                  {isLoadingHistory ? (
-                    <div className="flex items-center justify-center py-8 text-muted-foreground">
-                      <RotateCcw className="h-4 w-4 animate-spin mr-2" />
-                      Loading history...
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {getHistoryLogs().length === 0 ? (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          <p>No history data available</p>
-                          <p className="text-xs mt-1">History data is retained for 7 days on free accounts</p>
-                        </div>
-                      ) : (
-                        getHistoryLogs().map((log: any, index: number) => {
-                          const Icon = getValueIcon(log.code);
+                {isLoadingHistory ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground bg-muted/30 rounded-lg">
+                    <RotateCcw className="h-6 w-6 animate-spin mr-3" />
+                    <span>Loading device history...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {getHistoryLogs().length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground bg-muted/30 rounded-lg">
+                        <Calendar className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-lg font-medium">No history data available</p>
+                        <p className="text-sm mt-2">History data is retained for 7 days on free accounts</p>
+                        <p className="text-xs mt-1 text-muted-foreground/60">Make sure your device is active and generating events</p>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Charts View */}
+                        {historyView === "charts" && (() => {
+                          const chartData = getChartData();
                           return (
-                            <div 
-                              key={`${log.event_id}-${index}`} 
-                              className="flex items-start space-x-3 p-3 bg-card rounded-lg border border-border"
-                            >
-                              <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-lg mt-0.5">
-                                <Icon className="h-4 w-4 text-primary" />
-                              </div>
+                            <div className="space-y-6">
+                              {Object.entries(chartData).map(([code, data]: [string, any[]]) => (
+                                <Card key={code} className="p-4">
+                                  <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center space-x-2">
+                                      <div className="flex items-center justify-center w-8 h-8 bg-primary/10 rounded-lg">
+                                        {(() => {
+                                          const Icon = getValueIcon(code);
+                                          return <Icon className="h-4 w-4 text-primary" />;
+                                        })()
+                                        }
+                                      </div>
+                                      <div>
+                                        <h5 className="font-medium text-sm">{code}</h5>
+                                        <p className="text-xs text-muted-foreground">{data.length} readings</p>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center text-xs text-muted-foreground">
+                                      <TrendingUp className="h-3 w-3 mr-1" />
+                                      Last 24h
+                                    </div>
+                                  </div>
+                                  <div className="h-32">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <LineChart data={data.slice(-20).reverse()}>
+                                        <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+                                        <XAxis 
+                                          dataKey="time" 
+                                          tick={{ fontSize: 10 }}
+                                          axisLine={false}
+                                          tickLine={false}
+                                        />
+                                        <YAxis 
+                                          tick={{ fontSize: 10 }}
+                                          axisLine={false}
+                                          tickLine={false}
+                                          width={40}
+                                        />
+                                        <Tooltip 
+                                          labelStyle={{ color: 'hsl(var(--foreground))' }}
+                                          contentStyle={{ 
+                                            backgroundColor: 'hsl(var(--card))', 
+                                            border: '1px solid hsl(var(--border))',
+                                            borderRadius: '6px'
+                                          }}
+                                          formatter={(value: any) => [value, 'Value']}
+                                        />
+                                        <Line 
+                                          type="monotone" 
+                                          dataKey="value" 
+                                          stroke="hsl(var(--primary))" 
+                                          strokeWidth={2}
+                                          dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 3 }}
+                                          activeDot={{ r: 4 }}
+                                        />
+                                      </LineChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </Card>
+                              ))}
                               
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center justify-between">
-                                  <div className="text-sm font-medium text-foreground">
-                                    {log.code}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {log.relativeTime}
-                                  </div>
+                              {Object.keys(chartData).length === 0 && (
+                                <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                                  <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                  <p>No numeric data available for charts</p>
+                                  <p className="text-xs mt-1">Charts show temperature, power, and other sensor readings</p>
                                 </div>
-                                
-                                <div className="flex items-center justify-between mt-1">
-                                  <div className={`text-sm ${getValueColor(log.value, log.code)}`}>
-                                    {log.displayValue}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground">
-                                    {log.timeStr}
-                                  </div>
-                                </div>
-                                
-                                {log.event_from && (
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    Source: {log.event_from === "1" ? "Device" : "Cloud"}
-                                  </div>
-                                )}
-                              </div>
+                              )}
                             </div>
                           );
-                        })
-                      )}
-                    </div>
-                  )}
-                </div>
+                        })()}
+                        
+                        {/* Timeline View */}
+                        {historyView === "timeline" && (
+                          <div className="space-y-3 max-h-96 overflow-auto bg-muted/20 rounded-lg p-4">
+                            <div className="space-y-3">
+                              {getHistoryLogs().map((log: any, index: number) => {
+                                const Icon = getValueIcon(log.code);
+                                const isFirstOfDay = index === 0 || 
+                                  new Date(log.event_time).toDateString() !== 
+                                  new Date(getHistoryLogs()[index - 1]?.event_time).toDateString();
+                                
+                                return (
+                                  <div key={`${log.event_id}-${index}`}>
+                                    {isFirstOfDay && (
+                                      <div className="flex items-center my-4">
+                                        <div className="flex-1 h-px bg-border"></div>
+                                        <div className="px-3 text-xs font-medium text-muted-foreground bg-background">
+                                          {new Date(log.event_time).toLocaleDateString('en-US', { 
+                                            weekday: 'short', 
+                                            month: 'short', 
+                                            day: 'numeric' 
+                                          })}
+                                        </div>
+                                        <div className="flex-1 h-px bg-border"></div>
+                                      </div>
+                                    )}
+                                    <div className="flex items-start space-x-3 p-3 bg-card rounded-lg border border-border hover:shadow-sm transition-shadow">
+                                      <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg mt-0.5 flex-shrink-0">
+                                        <Icon className="h-5 w-5 text-primary" />
+                                      </div>
+                                      
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <div className="text-sm font-medium text-foreground">
+                                            {log.code}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground font-medium">
+                                            {log.relativeTime}
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-between">
+                                          <div className={`text-sm font-medium ${getValueColor(log.value, log.code)}`}>
+                                            {log.displayValue}
+                                          </div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {new Date(log.event_time).toLocaleTimeString()}
+                                          </div>
+                                        </div>
+                                        
+                                        <div className="flex items-center justify-between mt-2">
+                                          {log.event_from && (
+                                            <Badge variant="outline" className="text-xs h-5">
+                                              {log.event_from === "1" ? "Device" : "Cloud"}
+                                            </Badge>
+                                          )}
+                                          <div className="text-xs text-muted-foreground">
+                                            ID: {log.event_id}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </TabsContent>
           </Tabs>
