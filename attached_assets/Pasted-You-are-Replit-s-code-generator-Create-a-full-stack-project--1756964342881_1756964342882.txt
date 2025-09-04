@@ -1,0 +1,320 @@
+You are Replit’s code generator. Create a **full-stack** project:
+
+================================
+PROJECT GOAL
+================================
+Build a minimal app that **reads** Tuya Smart Life device data (devices list + current status) and **displays** it. 
+No control actions. No push notifications. Just read-and-show.
+
+================================
+STACK & REQUIREMENTS
+================================
+- Backend: Node 18+, Express, CORS. Use Tuya’s official Node connector package **tuya-connector-nodejs**.
+- Frontend: React + Vite.
+- API endpoints (server):
+  1) GET /api/health  → returns { ok: true }
+  2) GET /api/devices → list devices using the “associated users” API
+  3) GET /api/devices/:id/status → current DP status for a device
+- Config via ENV:
+  - TUYA_ACCESS_ID     (aka Access ID / client_id)
+  - TUYA_ACCESS_SECRET (aka Access Secret / client_secret)
+  - TUYA_ENDPOINT      (base URL; e.g. https://openapi.tuyain.com for India DC)
+  - PORT               (default 3000)
+- Security: Never expose Access Secret to the browser; all Tuya calls go server-side.
+- Frontend UI: 
+  - Home page shows:
+    * a “Fetch Devices” button
+    * a table listing: name, device_id, category, online/offline, and a “View Status” button
+  - Clicking “View Status” fetches /api/devices/:id/status and shows a panel with the returned DPs (code → value).
+
+================================
+SERVER CODE
+================================
+server/index.js:
+import express from "express";
+import cors from "cors";
+import { tuya } from "./tuya.js";
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+const PORT = process.env.PORT || 3000;
+
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, dc: process.env.TUYA_ENDPOINT || null });
+});
+
+// List devices associated with the linked Smart Life account
+app.get("/api/devices", async (_req, res) => {
+  try {
+    // Tuya OpenAPI: GET /v1.0/iot-01/associated-users/devices
+    const resp = await tuya.request({
+      path: "/v1.0/iot-01/associated-users/devices",
+      method: "GET",
+      query: { page_no: 1, page_size: 100 }
+    });
+    res.json(resp);
+  } catch (err) {
+    console.error("List devices error:", err?.response ?? err);
+    res.status(500).json({ error: "Failed to list devices", detail: err?.message || String(err) });
+  }
+});
+
+// Current device status
+app.get("/api/devices/:id/status", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Tuya OpenAPI: GET /v1.0/devices/{device_id}/status
+    const resp = await tuya.request({
+      path: `/v1.0/devices/${id}/status`,
+      method: "GET"
+    });
+    res.json(resp);
+  } catch (err) {
+    console.error("Get status error:", err?.response ?? err);
+    res.status(500).json({ error: "Failed to get device status", detail: err?.message || String(err) });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server listening on :${PORT}`);
+});
+
+
+server/tuya.js:
+import { TuyaContext } from "tuya-connector-nodejs";
+
+const baseUrl = process.env.TUYA_ENDPOINT;        // e.g. https://openapi.tuyain.com
+const accessKey = process.env.TUYA_ACCESS_ID;     // Access ID
+const secretKey = process.env.TUYA_ACCESS_SECRET; // Access Secret
+
+if (!baseUrl || !accessKey || !secretKey) {
+  console.warn("[WARN] Missing Tuya ENV: TUYA_ENDPOINT, TUYA_ACCESS_ID, TUYA_ACCESS_SECRET");
+}
+
+export const tuya = new TuyaContext({
+  baseUrl,
+  accessKey,
+  secretKey
+});
+
+
+================================
+ROOT package.json
+================================
+{
+  "name": "tuya-readonly-viewer",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "npm-run-all -p dev:server dev:client",
+    "dev:server": "node server/index.js",
+    "dev:client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "tuya-connector-nodejs": "^2.0.0"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5"
+  }
+}
+================================
+CLIENT CODE
+================================
+client/package.json:
+{
+  "name": "tuya-readonly-viewer-client",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0",
+    "@vitejs/plugin-react": "^4.2.0"
+  }
+}
+
+client/vite.config.js:
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: {
+      "/api": "http://localhost:3000"
+    }
+  }
+});
+
+
+client/index.html:
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tuya Read-Only Viewer</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+
+
+client/src/main.jsx:
+import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.jsx";
+import "./App.css";
+
+createRoot(document.getElementById("root")).render(<App />);
+
+
+client/src/api.js:
+export async function getDevices() {
+  const r = await fetch("/api/devices");
+  if (!r.ok) throw new Error("Failed to fetch devices");
+  return r.json();
+}
+
+export async function getDeviceStatus(id) {
+  const r = await fetch(`/api/devices/${id}/status`);
+  if (!r.ok) throw new Error("Failed to fetch status");
+  return r.json();
+}
+
+
+client/src/App.css:
+body { font-family: system-ui, Arial, sans-serif; margin: 0; padding: 1rem; }
+.container { max-width: 1000px; margin: 0 auto; }
+h1 { margin-bottom: 0.5rem; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+th, td { border: 1px solid #ddd; padding: 8px; }
+th { text-align: left; background: #f8f8f8; }
+button { padding: 6px 12px; cursor: pointer; }
+.status-panel { margin-top: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+.code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+
+client/src/App.jsx:
+import React, { useState } from "react";
+import { getDevices, getDeviceStatus } from "./api";
+
+export default function App() {
+  const [devices, setDevices] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState("");
+
+  const fetchDevices = async () => {
+    setBusy(true); setError(""); setStatus(null); setSelected(null);
+    try {
+      const data = await getDevices();
+      // SDK responses can vary; normalize common shapes
+      const list = data?.result?.list || data?.result || [];
+      setDevices(list);
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const viewStatus = async (dev) => {
+    setSelected(dev); setStatus(null); setError("");
+    try {
+      const id = dev.id || dev.device_id;
+      const data = await getDeviceStatus(id);
+      setStatus(data?.result || data);
+    } catch (e) {
+      setError(e.message || String(e));
+    }
+  };
+
+  return (
+    <div className="container">
+      <h1>Tuya Read-Only Viewer</h1>
+      <p>Reads Smart Life devices and current status. No control, no notifications.</p>
+
+      <button onClick={fetchDevices} disabled={busy}>
+        {busy ? "Loading..." : "Fetch Devices"}
+      </button>
+
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
+
+      {devices.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Device ID</th>
+              <th>Category</th>
+              <th>Online</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.map((d) => (
+              <tr key={d.id || d.device_id}>
+                <td>{d.name || "-"}</td>
+                <td className="code">{d.id || d.device_id}</td>
+                <td>{d.category || d.category_name || "-"}</td>
+                <td>{(d.online === true || d.online === "true") ? "Online" : "Offline"}</td>
+                <td>
+                  <button onClick={() => viewStatus(d)}>View Status</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {selected && (
+        <div className="status-panel">
+          <h3>Status for: {selected.name} <small className="code">({selected.id || selected.device_id})</small></h3>
+          {status ? (
+            <pre className="code" style={{ whiteSpace: "pre-wrap" }}>
+{JSON.stringify(status, null, 2)}
+            </pre>
+          ) : (
+            <p>Loading status…</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+================================
+ROOT DOTFILES
+================================
+.replit:
+run = ["bash", "-lc", "npm install && npm run dev"]
+
+
+================================
+SETUP
+================================
+1) In Replit Secrets, set TUYA_ACCESS_ID, TUYA_ACCESS_SECRET, TUYA_ENDPOINT (e.g. https://openapi.tuyain.com), PORT=3000
+2) Authorize APIs in Tuya project (Smart Home Basic Service, IoT Core)
+3) Link Smart Life account via QR in Tuya project
+4) Run Replit → click “Fetch Devices” → “View Status”
