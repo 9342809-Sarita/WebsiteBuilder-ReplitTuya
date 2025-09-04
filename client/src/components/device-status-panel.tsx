@@ -218,12 +218,30 @@ export function DeviceStatusPanel({
     }
     if (typeof value === "number") {
       const codeStr = code?.toLowerCase() || "";
+      
+      // Specific electrical measurement fields
+      if (code === "cur_current") {
+        return `${(value / 1000).toFixed(3)} A`; // Convert mA to A
+      }
+      if (code === "cur_power") {
+        return `${(value / 10).toFixed(1)} W`; // Convert 0.1W units to W
+      }
+      if (code === "cur_voltage") {
+        return `${(value / 10).toFixed(1)} V`; // Convert 0.1V units to V
+      }
+      if (code === "add_ele") {
+        return `${(value / 1000).toFixed(3)} kWh`; // Convert Wh to kWh
+      }
+      
+      // Generic handling for similar fields
       if (codeStr.includes("temp")) return `${value}°C`;
       if (codeStr.includes("humidity")) return `${value}%`;
       if (codeStr.includes("bright")) return `${value}%`;
-      if (codeStr.includes("power")) return `${value}W`;
-      if (codeStr.includes("current")) return `${value}A`;
-      if (codeStr.includes("voltage")) return `${value}V`;
+      if (codeStr.includes("power") && !code.startsWith("cur_")) return `${value}W`;
+      if (codeStr.includes("current") && !code.startsWith("cur_")) return `${value}A`;
+      if (codeStr.includes("voltage") && !code.startsWith("cur_")) return `${value}V`;
+      if (codeStr.includes("ele") && !code.startsWith("add_")) return `${value} Wh`;
+      
       return value.toString();
     }
     return String(value);
