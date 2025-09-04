@@ -17,6 +17,7 @@ interface DeviceStatusPanelProps {
   onRefresh: () => void;
   onExport: () => void;
   isLoading?: boolean;
+  isInline?: boolean;
 }
 
 export function DeviceStatusPanel({ 
@@ -25,7 +26,8 @@ export function DeviceStatusPanel({
   onClose, 
   onRefresh, 
   onExport,
-  isLoading 
+  isLoading,
+  isInline = false 
 }: DeviceStatusPanelProps) {
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -273,15 +275,17 @@ export function DeviceStatusPanel({
                 </CardDescription>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-muted-foreground hover:text-foreground"
-              data-testid="button-close-status-panel"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            {!isInline && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-muted-foreground hover:text-foreground"
+                data-testid="button-close-status-panel"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardHeader>
         
