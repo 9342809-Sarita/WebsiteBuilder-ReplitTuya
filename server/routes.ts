@@ -67,6 +67,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Device history logs
+  app.get("/api/devices/:id/history", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { 
+        start_time, 
+        end_time, 
+        size = "20", 
+        type = "1,2" 
+      } = req.query;
+
+      // Default to last 7 days if no time range specified
+      const endTime = end_time ? parseInt(end_time as string) : Date.now();
+      const startTime = start_time ? parseInt(start_time as string) : (endTime - 7 * 24 * 60 * 60 * 1000);
+
+      // Tuya OpenAPI: GET /v1.0/devices/{device_id}/logs
+      const resp = await tuya.request({
+        path: `/v1.0/devices/${id}/logs`,
+        method: "GET",
+        query: {
+          start_time: startTime,
+          end_time: endTime,
+          size: parseInt(size as string),
+          type: type as string
+        }
+      });
+      res.json(resp);
+    } catch (err: any) {
+      console.error("Get history error:", err?.response ?? err);
+      res.status(500).json({ 
+        error: "Failed to get device history", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
