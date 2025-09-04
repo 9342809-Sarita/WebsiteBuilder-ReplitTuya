@@ -42,7 +42,7 @@ export default function HomePage() {
     enabled: false, // Don't auto-fetch, wait for user action
   });
 
-  const devices: TuyaDevice[] = (devicesData as any)?.result?.list || (devicesData as any)?.result || [];
+  const devices: TuyaDevice[] = (devicesData as any)?.result?.devices || (devicesData as any)?.result?.list || (devicesData as any)?.result || [];
   
   // Calculate stats
   const totalDevices = devices.length;
