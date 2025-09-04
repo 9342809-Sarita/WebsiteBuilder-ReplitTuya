@@ -68,6 +68,22 @@ export default function HomePage() {
       });
     }
   };
+  
+  const handleRefreshAll = async () => {
+    // Close any open device status panel
+    setSelectedDevice(null);
+    setDeviceStatus(null);
+    
+    // If devices are already loaded, refresh them
+    if (devices.length > 0) {
+      await handleFetchDevices();
+    }
+    
+    toast({
+      title: "Refreshed",
+      description: "Application state refreshed",
+    });
+  };
 
   const handleViewStatus = async (device: TuyaDevice) => {
     setSelectedDevice(device);
@@ -175,10 +191,11 @@ export default function HomePage() {
                   </Button>
                   <Button 
                     variant="secondary"
-                    onClick={() => window.location.reload()}
+                    onClick={handleRefreshAll}
+                    disabled={isLoadingDevices}
                     data-testid="button-refresh-all"
                   >
-                    <RotateCcw className="mr-2 h-4 w-4" />
+                    <RotateCcw className={`mr-2 h-4 w-4 ${isLoadingDevices ? 'animate-spin' : ''}`} />
                     Refresh All
                   </Button>
                 </div>
