@@ -54,12 +54,12 @@ export async function handleAsk(req: Request, res: Response): Promise<void> {
     const specsResponse = await getJSON(`${base}/api/device-specs`);
     const deviceSpecs = specsResponse?.result || [];
 
-    // Get device statuses for the requested devices or all devices
+    // Get device statuses for all devices to provide comprehensive data to AI
     const targetDevices = deviceIds.length > 0 
       ? devices.filter((d: any) => deviceIds.includes(d.id || d.device_id))
-      : devices.slice(0, 5); // Limit to first 5 devices to avoid too much data
+      : devices; // Get all devices for comprehensive analysis
 
-    const deviceStatuses = [];
+    const deviceStatuses: any[] = [];
     for (const device of targetDevices) {
       const deviceId = device.id || device.device_id;
       if (deviceId) {
@@ -73,19 +73,68 @@ export async function handleAsk(req: Request, res: Response): Promise<void> {
       }
     }
 
+    // Create comprehensive context with all UI data
+    const enhancedDeviceData = devices.map((device: any) => {
+      const deviceId = device.id || device.device_id;
+      const status = deviceStatuses.find((s: any) => 
+        (s.device.id || s.device.device_id) === deviceId
+      );
+      const spec = deviceSpecs.find((s: any) => s.deviceId === deviceId);
+      
+      // Format status data points for readability
+      const statusData: any = {};
+      if (status?.status) {
+        status.status.forEach((dp: any) => {
+          const code = dp.code;
+          const value = dp.value;
+          
+          // Format specific data points with proper units and descriptions
+          switch (code) {
+            case 'switch_1':
+            case 'switch':
+              statusData.power_switch = value ? 'ON' : 'OFF';
+              break;
+            case 'cur_current':
+              statusData.current = `${(value / 1000).toFixed(3)} A`;
+              break;
+            case 'cur_power':
+              statusData.power = `${(value / 10).toFixed(1)} W`;
+              break;
+            case 'cur_voltage':
+              statusData.voltage = `${(value / 10).toFixed(1)} V`;
+              break;
+            case 'add_ele':
+              statusData.energy_consumption = `${(value / 100).toFixed(2)} kWh`;
+              break;
+            default:
+              statusData[code] = value;
+          }
+        });
+      }
+      
+      return {
+        id: deviceId,
+        name: device.name || 'Unknown Device',
+        product_name: device.product_name,
+        category: device.category,
+        online: device.online ? 'Online' : 'Offline',
+        active_time: device.active_time,
+        current_status: statusData,
+        user_specification: spec?.specification || 'No specification provided',
+        last_updated: new Date().toISOString()
+      };
+    });
+
     const context = {
+      query_time: new Date().toISOString(),
       timeRange: { start: start.toISOString(), end: end.toISOString(), gran },
-      devices: devices.map((d: any) => ({
-        id: d.id || d.device_id,
-        name: d.name,
-        product_name: d.product_name,
-        category: d.category,
-        online: d.online,
-        active_time: d.active_time
-      })),
-      deviceSpecs,
-      deviceStatuses,
-      summary: "Note: Advanced analytics endpoints (/api/stats/*, /api/series) are not yet implemented. Analysis is based on current device status and basic information."
+      total_devices: devices.length,
+      online_devices: devices.filter((d: any) => d.online).length,
+      offline_devices: devices.filter((d: any) => !d.online).length,
+      device_categories: Array.from(new Set(devices.map((d: any) => d.category).filter(Boolean))),
+      devices: enhancedDeviceData,
+      tuya_endpoint: "https://openapi.tuyain.com",
+      data_freshness: "Real-time data from Tuya Smart Life platform"
     };
 
     const answer = await askLLM({ question: q, context });

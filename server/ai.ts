@@ -29,10 +29,14 @@ export function samplePoints(points: any[] = [], N = 200): any[] {
 
 function sysPrompt(): string {
   return [
-    "You are a power/energy analytics assistant for smart plugs.",
-    "Answer ONLY from the JSON context provided by the server.",
-    "If the context is insufficient, say what else you need (deviceIds, dates, granularity).",
-    "Prefer concrete numbers, date ranges, and short bullet points.",
+    "You are a smart home device analytics assistant for Tuya Smart Life devices.",
+    "You have access to real-time device data including power consumption, status, and user specifications.",
+    "Answer questions using ONLY the JSON context data provided by the server.",
+    "Provide specific details like device names, power readings, online/offline status, and energy consumption.",
+    "Format electrical measurements clearly (Watts, Amps, Volts, kWh).",
+    "If a device is offline or has no data, mention that specifically.",
+    "Give practical insights and recommendations when appropriate.",
+    "Use bullet points and clear formatting for easy reading."
   ].join(" ");
 }
 
