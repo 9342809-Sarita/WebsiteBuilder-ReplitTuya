@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { TuyaContext } from "@tuya/tuya-connector-nodejs";
+import { storage } from "./storage";
+import { insertDeviceSpecSchema } from "@shared/schema";
 
 const baseUrl = process.env.TUYA_ENDPOINT || process.env.TUYA_ENDPOINT_ENV_VAR || "https://openapi.tuyain.com";
 const accessKey = process.env.TUYA_ACCESS_ID || process.env.TUYA_ACCESS_ID_ENV_VAR || "default_access_id";
@@ -98,6 +100,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Get history error:", err?.response ?? err);
       res.status(500).json({ 
         error: "Failed to get device history", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Device specifications endpoints
+  
+  // Get all device specifications
+  app.get("/api/device-specs", async (_req, res) => {
+    try {
+      const specs = await storage.getAllDeviceSpecs();
+      res.json({ success: true, result: specs });
+    } catch (err: any) {
+      console.error("Get device specs error:", err);
+      res.status(500).json({ 
+        error: "Failed to get device specifications", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Get device specification by device ID
+  app.get("/api/device-specs/:deviceId", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const spec = await storage.getDeviceSpec(deviceId);
+      if (!spec) {
+        res.status(404).json({ error: "Device specification not found" });
+        return;
+      }
+      res.json({ success: true, result: spec });
+    } catch (err: any) {
+      console.error("Get device spec error:", err);
+      res.status(500).json({ 
+        error: "Failed to get device specification", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Create or update device specification
+  app.post("/api/device-specs", async (req, res) => {
+    try {
+      const validatedData = insertDeviceSpecSchema.parse(req.body);
+      
+      // Check if specification already exists
+      const existingSpec = await storage.getDeviceSpec(validatedData.deviceId);
+      
+      if (existingSpec) {
+        // Update existing specification
+        const updatedSpec = await storage.updateDeviceSpec(validatedData.deviceId, {
+          deviceName: validatedData.deviceName,
+          specification: validatedData.specification
+        });
+        res.json({ success: true, result: updatedSpec, action: "updated" });
+      } else {
+        // Create new specification
+        const newSpec = await storage.createDeviceSpec(validatedData);
+        res.json({ success: true, result: newSpec, action: "created" });
+      }
+    } catch (err: any) {
+      console.error("Create/update device spec error:", err);
+      res.status(500).json({ 
+        error: "Failed to save device specification", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Delete device specification
+  app.delete("/api/device-specs/:deviceId", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const deleted = await storage.deleteDeviceSpec(deviceId);
+      if (!deleted) {
+        res.status(404).json({ error: "Device specification not found" });
+        return;
+      }
+      res.json({ success: true, message: "Device specification deleted" });
+    } catch (err: any) {
+      console.error("Delete device spec error:", err);
+      res.status(500).json({ 
+        error: "Failed to delete device specification", 
         detail: err?.message || String(err),
         timestamp: new Date().toISOString()
       });

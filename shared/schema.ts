@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, varchar, text, timestamp, serial } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 // Tuya device schema
 export const TuyaDeviceSchema = z.object({
@@ -25,3 +27,24 @@ export const TuyaApiResponseSchema = z.object({
 export type TuyaDevice = z.infer<typeof TuyaDeviceSchema>;
 export type TuyaDeviceStatus = z.infer<typeof TuyaDeviceStatusSchema>;
 export type TuyaApiResponse = z.infer<typeof TuyaApiResponseSchema>;
+
+// Database schema for device specifications
+export const deviceSpecs = pgTable("device_specs", {
+  id: serial("id").primaryKey(),
+  deviceId: varchar("device_id", { length: 255 }).notNull().unique(),
+  deviceName: varchar("device_name", { length: 255 }).notNull(),
+  specification: text("specification").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for device specifications
+export const insertDeviceSpecSchema = createInsertSchema(deviceSpecs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Types
+export type DeviceSpec = typeof deviceSpecs.$inferSelect;
+export type InsertDeviceSpec = z.infer<typeof insertDeviceSpecSchema>;

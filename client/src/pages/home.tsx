@@ -19,8 +19,10 @@ import {
   AlertCircle,
   Monitor,
   Smartphone,
-  Zap
+  Zap,
+  Settings
 } from "lucide-react";
+import { Link } from "wouter";
 
 export default function HomePage() {
   const [selectedDevice, setSelectedDevice] = useState<TuyaDevice | null>(null);
@@ -154,7 +156,13 @@ export default function HomePage() {
                 <p className="text-sm text-muted-foreground">Read-only Smart Life device viewer</p>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-4">
+              <Link href="/settings">
+                <Button variant="outline" size="sm" data-testid="link-settings">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Settings
+                </Button>
+              </Link>
               <div className="flex items-center space-x-2 text-sm text-muted-foreground">
                 <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
                 <span data-testid="connection-status">
