@@ -44,30 +44,27 @@ export async function askLLM({ question, context }: { question: string; context:
   if (!openai) {
     throw new Error("OpenAI not configured. Please set OPENAI_API_KEY environment variable.");
   }
-  
+
   console.log("[AI] Processing question:", question);
-  console.log("[AI] Context size:", JSON.stringify(context).length, "chars");
-  console.log("[AI] Using model:", MODEL, "with max tokens:", MAX_TOKENS);
-  
-  // Use Chat Completions for widest compatibility; Responses API also OK.
-  const resp = await openai.chat.completions.create({
+
+  const resp = await openai.responses.create({
     model: MODEL,
-    // Keep costs low by avoiding long prompts; we pass compact JSON below.
-    messages: [
+    input: [
       { role: "system", content: sysPrompt() },
       {
         role: "user",
         content:
           "Question:\n" + question +
-          "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000)
-      }
+          "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000),
+      },
     ],
-    max_completion_tokens: MAX_TOKENS
+    max_output_tokens: MAX_TOKENS,
   });
-  
-  const answer = resp.choices?.[0]?.message?.content || "";
-  console.log("[AI] OpenAI response length:", answer.length, "chars");
-  console.log("[AI] OpenAI response preview:", answer.substring(0, 200));
-  
+
+  let answer = resp.output_text?.trim() ?? "";
+  if (!answer) {
+    console.warn("[AI] Empty content from model, using fallback.");
+    answer = "I could not generate a response. Please try again.";
+  }
   return answer;
 }

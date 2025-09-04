@@ -1,0 +1,75 @@
+You are an AI code generator. Update my project to replace OpenAI Chat Completions with the new Responses API.
+
+1. Open file: `server/ai.ts`
+   - Replace the `askLLM` function so it uses `openai.responses.create` instead of `openai.chat.completions.create`.
+   - Use `resp.output_text?.trim() ?? ""` to read the model’s reply.
+   - Change `max_completion_tokens` → `max_output_tokens`.
+
+✅ Final `askLLM` function should look like this:
+
+------------------------------------------------
+import OpenAI from "openai";
+
+let openai: OpenAI | null = null;
+
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || undefined
+  });
+}
+
+export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+export const MAX_TOKENS = Number(process.env.MAX_TOKENS || "512");
+
+function sysPrompt(): string {
+  return [
+    "You are a smart home device analytics assistant for Tuya Smart Life devices.",
+    "You have access to real-time device data including power consumption, status, and user specifications.",
+    "Answer questions using ONLY the JSON context data provided by the server.",
+    "Provide specific details like device names, power readings, online/offline status, and energy consumption.",
+    "Format electrical measurements clearly (Watts, Amps, Volts, kWh).",
+    "If a device is offline or has no data, mention that specifically.",
+    "Give practical insights and recommendations when appropriate.",
+    "Use bullet points and clear formatting for easy reading."
+  ].join(" ");
+}
+
+export async function askLLM({ question, context }: { question: string; context: any }): Promise<string> {
+  if (!openai) {
+    throw new Error("OpenAI not configured. Please set OPENAI_API_KEY environment variable.");
+  }
+
+  console.log("[AI] Processing question:", question);
+
+  const resp = await openai.responses.create({
+    model: MODEL,
+    input: [
+      { role: "system", content: sysPrompt() },
+      {
+        role: "user",
+        content:
+          "Question:\n" + question +
+          "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000),
+      },
+    ],
+    max_output_tokens: MAX_TOKENS,
+  });
+
+  let answer = resp.output_text?.trim() ?? "";
+  if (!answer) {
+    console.warn("[AI] Empty content from model, using fallback.");
+    answer = "I could not generate a response. Please try again.";
+  }
+  return answer;
+}
+------------------------------------------------
+
+2. Do **not** change anything else in `server/ask.ts` or the frontend.  
+   The `/api/ask` endpoint will continue to work — it now uses `Responses API` internally.
+
+3. Save the file and run the project again. Test by opening the Ask AI page and asking a simple question like:
+   - "Say hello world"
+   - "List all my devices"
+
+You should now get non-empty answers.
