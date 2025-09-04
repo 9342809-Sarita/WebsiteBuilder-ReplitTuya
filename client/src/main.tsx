@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import SimpleEnergyApp from "./SimpleEnergyApp";
-import "./styles.css";
+import App from "./App";
+import "./index.css";
 
-createRoot(document.getElementById("root")!).render(<SimpleEnergyApp />);
+createRoot(document.getElementById("root")!).render(<App />);
