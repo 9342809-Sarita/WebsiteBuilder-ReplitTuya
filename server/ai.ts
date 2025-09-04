@@ -41,6 +41,10 @@ export async function askLLM({ question, context }: { question: string; context:
     throw new Error("OpenAI not configured. Please set OPENAI_API_KEY environment variable.");
   }
   
+  console.log("[AI] Processing question:", question);
+  console.log("[AI] Context size:", JSON.stringify(context).length, "chars");
+  console.log("[AI] Using model:", MODEL, "with max tokens:", MAX_TOKENS);
+  
   // Use Chat Completions for widest compatibility; Responses API also OK.
   const resp = await openai.chat.completions.create({
     model: MODEL,
@@ -56,5 +60,10 @@ export async function askLLM({ question, context }: { question: string; context:
     ],
     max_completion_tokens: MAX_TOKENS
   });
-  return resp.choices?.[0]?.message?.content || "";
+  
+  const answer = resp.choices?.[0]?.message?.content || "";
+  console.log("[AI] OpenAI response length:", answer.length, "chars");
+  console.log("[AI] OpenAI response preview:", answer.substring(0, 200));
+  
+  return answer;
 }

@@ -46,6 +46,12 @@ export default function AskPage() {
         throw new Error(data.error || "Ask AI failed");
       }
       
+      console.log("AI Response data:", data);
+      
+      if (!data.answer || data.answer.trim() === "") {
+        throw new Error("AI returned an empty response. Please try rephrasing your question or try again later.");
+      }
+      
       setAnswer(data.answer);
       toast({
         title: "Question Answered",
