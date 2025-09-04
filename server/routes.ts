@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { TuyaContext } from "@tuya/tuya-connector-nodejs";
 import { storage } from "./storage";
 import { insertDeviceSpecSchema } from "@shared/schema";
+import { handleAsk } from "./ask";
 
 const baseUrl = process.env.TUYA_ENDPOINT || process.env.TUYA_ENDPOINT_ENV_VAR || "https://openapi.tuyain.com";
 const accessKey = process.env.TUYA_ACCESS_ID || process.env.TUYA_ACCESS_ID_ENV_VAR || "default_access_id";
@@ -192,6 +193,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // Ask AI endpoint
+  app.get("/api/ask", handleAsk);
 
   const httpServer = createServer(app);
   return httpServer;

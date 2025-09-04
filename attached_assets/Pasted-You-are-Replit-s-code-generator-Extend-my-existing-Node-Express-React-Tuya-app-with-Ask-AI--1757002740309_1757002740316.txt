@@ -1,0 +1,232 @@
+You are Replit’s code generator. Extend my existing Node/Express + React Tuya app with **Ask AI**:
+- Server: add /api/ask to call OpenAI with context from my own APIs (/api/stats/* and /api/series).
+- Client: add a simple “Ask AI” page with a chat box. This is **read-only analytics** (no device control).
+
+===============================
+ENV VARS (create if missing)
+===============================
+- OPENAI_API_KEY   -> from platform.openai.com
+- OPENAI_MODEL     -> default "gpt-4o-mini" (I can change later)
+- MAX_TOKENS       -> default "512"       (cap cost)
+- OPENAI_BASE_URL  -> optional (usually not needed)
+
+===============================
+ROOT package.json (update)
+===============================
+- Add dependency: "openai": "^4.54.0"
+
+===============================
+Add file: server/ai.js
+===============================
+import OpenAI from "openai";
+export const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL || undefined
+});
+export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+export const MAX_TOKENS = Number(process.env.MAX_TOKENS || "512");
+
+/**
+ * Helper to clamp/summarize arrays so prompts stay small.
+ * Keeps at most N points uniformly sampled.
+ */
+export function samplePoints(points = [], N = 200) {
+  if (!Array.isArray(points) || points.length <= N) return points;
+  const step = points.length / N;
+  const out = [];
+  for (let i = 0; i < points.length; i += step) {
+    out.push(points[Math.floor(i)]);
+  }
+  return out;
+}
+
+function sysPrompt() {
+  return [
+    "You are a power/energy analytics assistant for smart plugs.",
+    "Answer ONLY from the JSON context provided by the server.",
+    "If the context is insufficient, say what else you need (deviceIds, dates, granularity).",
+    "Prefer concrete numbers, date ranges, and short bullet points.",
+  ].join(" ");
+}
+
+export async function askLLM({ question, context }) {
+  // Use Chat Completions for widest compatibility; Responses API also OK.
+  const resp = await openai.chat.completions.create({
+    model: MODEL,
+    // Keep costs low by avoiding long prompts; we pass compact JSON below.
+    messages: [
+      { role: "system", content: sysPrompt() },
+      {
+        role: "user",
+        content:
+          "Question:\n" + question +
+          "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000)
+      }
+    ],
+    max_tokens: MAX_TOKENS,
+    temperature: 0.2
+  });
+  return resp.choices?.[0]?.message?.content || "";
+}
+
+===============================
+Add file: server/ask.js
+===============================
+import { askLLM, samplePoints } from "./ai.js";
+
+/**
+ * GET /api/ask
+ * query:
+ *   q=... (user question)
+ *   deviceIds=dev1,dev2  (optional; if absent, server can auto-pick top devices)
+ *   start=ISO, end=ISO   (optional; if absent, fetch last 30 days)
+ *   gran=hour|day|year   (default day)
+ *
+ * Implementation detail:
+ * - Pulls compact stats from our own backend endpoints:
+ *   /api/stats/summary, /api/stats/peaks, /api/series
+ * - Downsamples time series to keep tokens small.
+ */
+export async function handleAsk(req, res) {
+  try {
+    const q = (req.query.q || "").toString();
+    if (!q.trim()) return res.status(400).json({ error: "missing q" });
+
+    const deviceIds = ((req.query.deviceIds || "").toString())
+      .split(",").map(s=>s.trim()).filter(Boolean);
+
+    const now = new Date();
+    const end = req.query.end ? new Date(req.query.end) : now;
+    const start = req.query.start ? new Date(req.query.start)
+      : new Date(end.getTime() - 30*24*60*60*1000); // last 30 days by default
+    const gran = (req.query.gran || "day").toString();
+
+    // Fetch summary + series from our own API (keeps secret keys server-side)
+    const base = "http://localhost:" + (process.env.PORT || 3000);
+    const idsParam = deviceIds.join(",");
+
+    async function getJSON(u){ const r = await fetch(u); return r.json(); }
+
+    const summaryUrl = new URL(base + "/api/stats/summary");
+    summaryUrl.search = new URLSearchParams({
+      deviceIds: idsParam,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      gran
+    });
+
+    const compareUrl = new URL(base + "/api/stats/compare");
+    compareUrl.search = new URLSearchParams({
+      deviceIds: idsParam,
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+
+    const seriesUrl = new URL(base + "/api/series");
+    seriesUrl.search = new URLSearchParams({
+      deviceIds: idsParam,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      gran
+    });
+
+    const [summary, compare, series] = await Promise.all([
+      getJSON(summaryUrl), getJSON(compareUrl), getJSON(seriesUrl)
+    ]);
+
+    // Downsample series for prompt economy
+    const seriesSlim = {
+      granularity: series?.granularity || gran,
+      combined: samplePoints(series?.combined || [], 180),
+      series: (series?.series || []).map(s => ({
+        deviceId: s.deviceId,
+        points: samplePoints(s.points || [], 120)
+      }))
+    };
+
+    const context = {
+      timeRange: { start: start.toISOString(), end: end.toISOString(), gran },
+      summary, compare, series: seriesSlim
+    };
+
+    const answer = await askLLM({ question: q, context });
+    res.json({ ok: true, answer, used: {
+      devices: deviceIds,
+      timeRange: context.timeRange,
+      granularity: gran,
+      tokensCapped: true
+    }});
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok:false, error: String(e) });
+  }
+}
+
+===============================
+Modify: server/index.js (wire the route)
+===============================
+import { handleAsk } from "./ask.js";
+app.get("/api/ask", handleAsk);
+console.log("[ai] /api/ask ready");
+
+===============================
+Client: add a simple Ask page
+===============================
+- If you already use a router, add a route /ask.
+- Files to add:
+
+client/src/pages/Ask.jsx
+--------------------------------
+import React, { useState } from "react";
+
+export default function Ask() {
+  const [q, setQ] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function ask() {
+    setBusy(true); setErr(""); setAnswer("");
+    try {
+      const url = new URL("/api/ask", window.location.origin);
+      url.search = new URLSearchParams({ q }).toString();
+      const r = await fetch(url);
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || "Ask failed");
+      setAnswer(j.answer);
+    } catch(e) { setErr(String(e)); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <div className="page">
+      <h2>Ask AI</h2>
+      <p>Ask questions about the data shown in the dashboard (e.g., “Which plug used the most energy last month?”).</p>
+      <textarea rows={4} value={q} onChange={e=>setQ(e.target.value)} placeholder="Your question..." />
+      <div><button onClick={ask} disabled={busy || !q.trim()}>{busy? "Thinking..." : "Ask"}</button></div>
+      {err && <p style={{color:"crimson"}}>{err}</p>}
+      {answer && (<div className="answer"><pre>{answer}</pre></div>)}
+    </div>
+  );
+}
+
+- Add a nav link to /ask in your main App header (if you use a router).
+
+===============================
+Quick styles addition (optional)
+===============================
+/* client/src/styles.css */
+.answer { white-space: pre-wrap; border:1px solid #eee; padding:12px; border-radius:12px; margin-top:12px; }
+
+===============================
+Post-create steps (print)
+===============================
+1) Set these secrets in Replit:
+   - OPENAI_API_KEY = <your key from platform.openai.com>
+   - OPENAI_MODEL   = gpt-4o-mini   # or another low-cost mini from the pricing page
+   - MAX_TOKENS     = 512
+2) Click Run. Open /ask in the webview. Try: “Compare energy by device for last week. Who is highest?”
+3) To tune cost:
+   - Lower MAX_TOKENS
+   - Narrow time ranges or fewer devices
+   - Downsample more aggressively in server/ai.js

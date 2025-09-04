@@ -20,7 +20,8 @@ import {
   Monitor,
   Smartphone,
   Zap,
-  Settings
+  Settings,
+  MessageSquare
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -157,6 +158,12 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Link href="/ask">
+                <Button variant="outline" size="sm" data-testid="link-ask">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Ask AI
+                </Button>
+              </Link>
               <Link href="/settings">
                 <Button variant="outline" size="sm" data-testid="link-settings">
                   <Settings className="mr-2 h-4 w-4" />
