@@ -1,3 +1,9 @@
+You are editing the same repo.
+
+Task: Make the Ask API use session history and return a refreshed transcript.
+
+Replace entire file server/ask.ts with:
+
 // server/ask.ts
 import type { Request, Response } from "express";
 import { askLLMWithHistory, samplePoints } from "./ai";
@@ -83,3 +89,7 @@ export async function resetAsk(req: Request, res: Response) {
   resetSession(sessionId);
   res.json({ ok: true, sessionId, history: [] });
 }
+
+
+Do not change other files yet.
+Return only: “Ask API upgraded.”
