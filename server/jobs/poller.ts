@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { tuya } from "../tuya";
 import { normalizeFromStatus, type TuyaStatus } from "../normalize";
+import { detectAnomalies } from "../logic/anomaly";
 
 const prisma = new PrismaClient();
 
@@ -130,6 +131,13 @@ async function healthTick() {
           online: device.online
         }
       });
+
+      // Run anomaly detection
+      await detectAnomalies(device.id, {
+        voltageV: normalized.voltageV,
+        pfEst: normalized.pfEst,
+        online: device.online
+      }, now);
     }
     
     console.log("[HEALTH] Health tick completed");

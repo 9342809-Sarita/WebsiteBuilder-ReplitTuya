@@ -191,6 +191,65 @@ router.get("/series", async (req, res) => {
 });
 
 /**
+ * GET /api/events?deviceId&start&end
+ * Returns event data (anomalies and state changes)
+ */
+router.get("/events", async (req, res) => {
+  try {
+    const { deviceId, start, end } = req.query;
+
+    const startTime = start ? new Date(start as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
+    const endTime = end ? new Date(end as string) : new Date();
+
+    const whereClause: any = {
+      tsUtc: { gte: startTime, lte: endTime }
+    };
+
+    if (deviceId) {
+      whereClause.deviceId = deviceId as string;
+    }
+
+    const events = await prisma.event.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        deviceId: true,
+        tsUtc: true,
+        type: true,
+        payload: true
+      },
+      orderBy: {
+        tsUtc: 'desc'
+      }
+    });
+
+    const response = events.map(event => ({
+      id: event.id.toString(),
+      deviceId: event.deviceId,
+      timestamp: event.tsUtc.toISOString(),
+      type: event.type,
+      payload: event.payload
+    }));
+
+    res.json({
+      success: true,
+      deviceId: deviceId || 'all',
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      count: response.length,
+      events: response
+    });
+
+  } catch (error) {
+    console.error("[ENERGY] Error getting events:", error);
+    res.status(500).json({ 
+      error: "Failed to get events",
+      detail: String(error)
+    });
+  }
+});
+
+/**
  * GET /api/daily-kwh?deviceId&startDay&endDay
  * Returns daily kWh consumption data
  */
