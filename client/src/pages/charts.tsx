@@ -1,20 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
 import { ArrowLeft, Activity, Zap, Calendar, BarChart3 } from "lucide-react";
 import { Link } from "wouter";
-
-interface Device {
-  deviceId: string;
-  name: string;
-  online: boolean;
-  lastSeenUtc: string;
-}
+import DeviceSelector from "@/components/DeviceSelector";
 
 interface SeriesDataPoint {
   t: string;
@@ -27,35 +19,19 @@ interface DailyKwhDataPoint {
 }
 
 export default function ChartsPage() {
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
-
-  // Fetch devices summary
-  const { data: devicesData } = useQuery({
-    queryKey: ["/api/devices/summary"],
-    enabled: true
-  });
-
-  // Set first device as default when data loads
-  useEffect(() => {
-    const devices = (devicesData as any)?.devices;
-    if (devices?.length > 0 && !selectedDeviceId) {
-      setSelectedDeviceId(devices[0].deviceId);
-    }
-  }, [devicesData, selectedDeviceId]);
+  const [deviceId, setDeviceId] = useState<string>("");
 
   // Fetch power series data for daily chart
   const { data: powerSeriesData } = useQuery({
-    queryKey: [`/api/series?deviceId=${selectedDeviceId}&metric=power&gran=1m`],
-    enabled: !!selectedDeviceId
+    queryKey: [`/api/series?deviceId=${deviceId}&metric=power&gran=1m`],
+    enabled: !!deviceId
   });
 
   // Fetch daily kWh data for monthly/yearly charts
   const { data: dailyKwhData } = useQuery({
-    queryKey: [`/api/daily-kwh?deviceId=${selectedDeviceId}`],
-    enabled: !!selectedDeviceId
+    queryKey: [`/api/daily-kwh?deviceId=${deviceId}`],
+    enabled: !!deviceId
   });
-
-  const selectedDevice = (devicesData as any)?.devices?.find((d: Device) => d.deviceId === selectedDeviceId);
 
   // Process daily power data for chart
   const dailyChartData = (powerSeriesData as any)?.data?.map((point: SeriesDataPoint) => ({
@@ -132,44 +108,14 @@ export default function ChartsPage() {
               </CardTitle>
               <CardDescription>Select a device to view its energy consumption data</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <Select value={selectedDeviceId} onValueChange={setSelectedDeviceId}>
-                  <SelectTrigger className="w-64" data-testid="device-selector">
-                    <SelectValue placeholder="Select a device" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(devicesData as any)?.devices?.map((device: Device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId}>
-                        {device.name || device.deviceId}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                {selectedDevice && (
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={selectedDevice.online ? "default" : "secondary"}>
-                      {selectedDevice.online ? "Online" : "Offline"}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ID: {selectedDevice.deviceId}
-                    </span>
-                  </div>
-                )}
-              </div>
-              
-              {selectedDevice && (
-                <div className="text-sm text-muted-foreground">
-                  Last seen: {new Date(selectedDevice.lastSeenUtc).toLocaleString()}
-                </div>
-              )}
+            <CardContent>
+              <DeviceSelector value={deviceId} onChange={setDeviceId} />
             </CardContent>
           </Card>
         </div>
 
         {/* Charts */}
-        {selectedDeviceId && (
+        {deviceId ? (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -254,13 +200,11 @@ export default function ChartsPage() {
               </Tabs>
             </CardContent>
           </Card>
-        )}
-        
-        {!selectedDeviceId && (
+        ) : (
           <Card>
             <CardContent className="py-8 text-center">
               <div className="text-muted-foreground">
-                Select a device above to view its energy consumption charts
+                Choose a device to view charts.
               </div>
             </CardContent>
           </Card>

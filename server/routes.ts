@@ -5,11 +5,15 @@ import { insertDeviceSpecSchema } from "@shared/schema";
 import { handleAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
 import energyRouter from "./routes/energy";
+import devicesUiRouter from "./routes/devices-ui";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount energy API routes
   app.use("/api", energyRouter);
+  
+  // Mount devices UI API routes
+  app.use("/api", devicesUiRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {

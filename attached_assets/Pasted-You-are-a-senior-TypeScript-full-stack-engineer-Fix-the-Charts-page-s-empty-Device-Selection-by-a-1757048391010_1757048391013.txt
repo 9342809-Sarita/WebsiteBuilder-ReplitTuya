@@ -1,0 +1,182 @@
+You are a senior TypeScript full-stack engineer. Fix the Charts page’s empty “Device Selection” by adding a normalized devices endpoint and wiring the UI to it. Keep changes minimal and well-commented. After finishing, print: FIX DONE: charts-device-dropdown and list changed files.
+
+Goal
+
+Create a stable API GET /api/devices/ui that returns:
+
+{ "devices": [ { "deviceId": "xxx", "name": "Plug A", "online": true } ] }
+
+
+Then update the Charts page to use it.
+
+1) Backend: normalized devices endpoint
+
+Create server/routes/devices-ui.ts:
+
+import { Router } from "express";
+import { TuyaContext } from "@tuya/tuya-connector-nodejs";
+
+// Reuse existing envs; keep defaults consistent with your project
+const baseUrl  = process.env.TUYA_ENDPOINT || "https://openapi.tuyain.com";
+const accessKey = process.env.TUYA_ACCESS_ID || "";
+const secretKey = process.env.TUYA_ACCESS_SECRET || "";
+
+const tuya = new TuyaContext({ baseUrl, accessKey, secretKey });
+const r = Router();
+
+/**
+ * GET /api/devices/ui
+ * Returns a normalized list for UI dropdown.
+ * Never rely on DB; query Tuya directly so it works on fresh installs.
+ */
+r.get("/devices/ui", async (_req, res) => {
+  try {
+    const resp = await tuya.request({
+      path: "/v1.0/iot-01/associated-users/devices",
+      method: "GET",
+      query: { page_no: 1, page_size: 100 }
+    });
+    const list = resp?.result?.devices ?? [];
+    const devices = list.map((d: any) => {
+      const deviceId = d.id ?? d.device_id ?? "";
+      return {
+        deviceId,
+        name: d.name ?? deviceId,
+        online: Boolean(d.online)
+      };
+    }).filter((x: any) => x.deviceId);
+    res.json({ devices });
+  } catch (err: any) {
+    console.error("[/api/devices/ui] error:", err?.response ?? err);
+    res.status(500).json({ devices: [], error: "Failed to fetch devices" });
+  }
+});
+
+export default r;
+
+
+Register it in your route setup (e.g., server/routes/index.ts or wherever you attach routes):
+
+import devicesUiRouter from "./devices-ui";
+app.use("/api", devicesUiRouter);
+
+
+Acceptance (backend)
+
+Open /api/devices/ui in the browser → you should see { devices: [...] } with deviceId, name, online.
+
+If it’s empty, confirm /api/devices returns Tuya data; if that’s empty too, the Smart Life account may have no devices or Tuya creds are missing.
+
+2) Frontend: wire the Charts page to /api/devices/ui
+
+Update the Charts page (or the DeviceSelector component). Example:
+
+// client/components/DeviceSelector.tsx (create or edit your existing selector)
+import React, { useEffect, useState } from "react";
+
+type UiDevice = { deviceId: string; name: string; online: boolean };
+
+export default function DeviceSelector(props: {
+  value?: string;
+  onChange: (id: string) => void;
+}) {
+  const [devices, setDevices] = useState<UiDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+        // IMPORTANT: relative path so it works in dev/prod
+        const r = await fetch("/api/devices/ui");
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if (mounted) setDevices(Array.isArray(data.devices) ? data.devices : []);
+      } catch (e: any) {
+        if (mounted) setErr(e?.message || String(e));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
+  if (loading) return <div>Loading devices…</div>;
+  if (err) return <div className="text-red-600">Failed to load devices: {err}</div>;
+  if (!devices.length) return <div>No devices found.</div>;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="font-medium">Device Selection</label>
+      <select
+        className="border rounded px-2 py-1"
+        value={props.value || ""}
+        onChange={e => props.onChange(e.target.value)}
+      >
+        <option value="" disabled>Select a device…</option>
+        {devices.map(d => (
+          <option key={d.deviceId} value={d.deviceId}>
+            {d.name} {d.online ? "" : "(offline)"}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+
+Use the selector in your Charts page:
+
+// client/pages/Charts.tsx (adjust paths as per your project)
+import React, { useState } from "react";
+import DeviceSelector from "../components/DeviceSelector";
+
+export default function ChartsPage() {
+  const [deviceId, setDeviceId] = useState<string>("");
+
+  // Use deviceId in your series fetches, e.g. /api/series?deviceId=...
+  // Render charts conditionally when deviceId is chosen
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl mb-4">Charts</h1>
+      <DeviceSelector value={deviceId} onChange={setDeviceId} />
+      {deviceId ? (
+        <div className="mt-4">
+          {/* your charts for the chosen device */}
+        </div>
+      ) : (
+        <div className="mt-4 text-gray-600">Choose a device to view charts.</div>
+      )}
+    </div>
+  );
+}
+
+
+Acceptance (frontend)
+
+Click Charts → the dropdown should populate with your Tuya devices.
+
+Selecting a device should let your charts use deviceId for API calls.
+
+3) Common pitfalls checklist
+
+Absolute URLs: ensure the frontend uses relative fetch("/api/..."); avoid http://localhost:5000 in browser code.
+
+Tuya creds: make sure TUYA_ACCESS_ID/SECRET are set in Replit/Hostinger; /api/devices should already work.
+
+CORS: not needed if your server serves both API and UI on the same origin (your setup does).
+
+Env port: ensure the server binds 0.0.0.0 and process.env.PORT (your code already does).
+
+When done, print exactly:
+
+FIX DONE: charts-device-dropdown
+Changed files:
+- server/routes/devices-ui.ts
+- server/routes/index.ts (router mount)
+- client/components/DeviceSelector.tsx
+- client/pages/Charts.tsx
