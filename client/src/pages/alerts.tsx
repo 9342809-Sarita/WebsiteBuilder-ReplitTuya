@@ -1,0 +1,137 @@
+// client/src/pages/alerts.tsx
+import { useEffect, useMemo, useState } from "react";
+import { PageLayout } from "@/components/page-layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+
+function useBeep() {
+  // WebAudio beep to avoid asset files
+  return useMemo(() => {
+    return () => {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine"; o.frequency.value = 880;
+      o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.1, ctx.currentTime);
+      o.start();
+      setTimeout(() => { o.stop(); ctx.close(); }, 400);
+    };
+  }, []);
+}
+
+export default function AlertsPage() {
+  const [rules, setRules] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
+  const [form, setForm] = useState<any>({ name: "", deviceId: "", metric: "powerW", op: ">", threshold: 1000, durationS: 0 });
+  const beep = useBeep();
+
+  const load = async () => {
+    const r1 = await fetch("/api/alerts/rules").then(r=>r.json());
+    const r2 = await fetch("/api/alerts/events").then(r=>r.json());
+    if (r1.ok) setRules(r1.rules);
+    if (r2.ok) setEvents(r2.events);
+  };
+
+  useEffect(() => {
+    load();
+    const es = new EventSource("/api/alerts/stream");
+    es.addEventListener("alert", (e: any) => {
+      try {
+        const data = JSON.parse(e.data);
+        setEvents(prev => [data.event, ...prev].slice(0, 200));
+        // play audio
+        beep();
+        // optional: Notification API
+        if (Notification && Notification.permission === "granted") {
+          new Notification("Power alert", { body: data.event?.message });
+        }
+      } catch {}
+    });
+    // request notification permission
+    if (Notification && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    return () => es.close();
+  }, [beep]);
+
+  const create = async () => {
+    const res = await fetch("/api/alerts/rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) }).then(r=>r.json());
+    if (res.ok) { setForm({ ...form, name: "" }); load(); }
+    else alert(res.error || "Failed");
+  };
+  const del = async (id: any) => {
+    if (!confirm("Delete this rule?")) return;
+    const res = await fetch(`/api/alerts/rules/${id}`, { method: "DELETE" }).then(r=>r.json());
+    if (res.ok) load();
+  };
+
+  // quick device helper from your devices endpoint
+  const [devices, setDevices] = useState<any[]>([]);
+  useEffect(() => {
+    fetch("/api/devices").then(r=>r.json()).then(j=> setDevices(j?.result?.devices || []));
+  }, []);
+
+  return (
+    <PageLayout>
+      <div className="container mx-auto p-4 space-y-6">
+        <Card>
+          <CardHeader><CardTitle>Create Alert Rule</CardTitle></CardHeader>
+          <CardContent className="grid sm:grid-cols-3 gap-3">
+            <Input placeholder="Rule name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/>
+            <Select value={form.deviceId} onValueChange={v=>setForm({...form, deviceId:v})}>
+              <SelectTrigger><SelectValue placeholder="Device"/></SelectTrigger>
+              <SelectContent>
+                {devices.map((d:any)=> <SelectItem key={d.id||d.device_id} value={d.id||d.device_id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={form.metric} onValueChange={v=>setForm({...form, metric:v})}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="powerW">powerW</SelectItem>
+                <SelectItem value="voltageV">voltageV</SelectItem>
+                <SelectItem value="currentA">currentA</SelectItem>
+                <SelectItem value="pfEst">pfEst</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={form.op} onValueChange={v=>setForm({...form, op:v})}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["<","<=","==","!=",">=",">"].map(o=> <SelectItem key={o} value={o}>{o}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Input type="number" placeholder="threshold" value={form.threshold} onChange={e=>setForm({...form, threshold:Number(e.target.value)})}/>
+            <Input type="number" placeholder="durationS" value={form.durationS} onChange={e=>setForm({...form, durationS:Number(e.target.value)})}/>
+            <Button onClick={create} className="sm:col-span-3">Create</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Active Rules</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {rules.map(r=> (
+              <div key={r.id} className="flex items-center justify-between border rounded p-2">
+                <div className="text-sm">{r.name} — {r.deviceId} — {r.metric} {r.op} {r.threshold} for {r.durationS}s</div>
+                <Button variant="destructive" size="sm" onClick={()=>del(r.id)}>Delete</Button>
+              </div>
+            ))}
+            {rules.length===0 && <div className="text-sm text-muted-foreground">No rules yet.</div>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Recent Alert Events</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {events.map(ev=> (
+              <div key={ev.id} className="text-sm border rounded p-2">
+                <div>{new Date(ev.tsUtc).toLocaleString()} — {ev.message || `${ev.deviceId} value ${ev.value}`}</div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </PageLayout>
+  );
+}
