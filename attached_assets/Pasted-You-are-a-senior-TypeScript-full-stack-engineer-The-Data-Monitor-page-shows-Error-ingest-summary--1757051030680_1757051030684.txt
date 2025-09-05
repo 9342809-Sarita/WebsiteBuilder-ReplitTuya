@@ -1,0 +1,408 @@
+You are a senior TypeScript full-stack engineer. The Data Monitor page shows Error: /ingest-summary HTTP 500. Make the monitor robust and self-diagnosing so I can see why it’s failing and whether the DB/tables exist.
+
+After finishing, print exactly:
+
+FIX DONE: monitor-robust-diagnostics
+Changed files:
+- server/routes/monitor.ts
+- client/pages/Monitor.tsx
+
+What to build
+
+Harden the backend monitor routes:
+
+Wrap each DB call in its own try/catch so one missing table doesn’t 500 the whole request.
+
+Return a structured payload with partial results and per-table error messages.
+
+Add a /api/monitor/schema route that reports whether each Prisma model’s table exists (works for SQLite and MySQL).
+
+Add a /api/monitor/selftest route that returns: database provider (from DATABASE_URL), can-connect check, Prisma version, and a lightweight SELECT 1.
+
+Surface diagnostics in the frontend:
+
+On the Monitor page, show any backend-reported errors inline (small red chips) next to the affected metric/table.
+
+Add a collapsible “Diagnostics” box that calls /api/monitor/schema and /api/monitor/selftest and prints their JSON (pretty).
+
+Keep changes minimal and well-commented. Don’t refactor unrelated code.
+
+Backend patch — server/routes/monitor.ts
+
+Replace the current file with this:
+
+import { Router } from "express";
+import { PrismaClient } from "@prisma/client";
+
+const r = Router();
+const prisma = new PrismaClient();
+
+/**
+ * Utility: detect DB flavor from DATABASE_URL
+ */
+function dbFlavor() {
+  const url = process.env.DATABASE_URL || "";
+  if (url.startsWith("file:")) return "sqlite";
+  if (url.startsWith("mysql://") || url.startsWith("mysqls://")) return "mysql";
+  if (url.startsWith("postgres://") || url.startsWith("postgresql://")) return "postgres";
+  return "unknown";
+}
+
+/**
+ * GET /api/monitor/ingest-summary
+ * Robust summary: partial results plus per-metric errors instead of a single 500.
+ */
+r.get("/monitor/ingest-summary", async (_req, res) => {
+  const errors: Record<string, string> = {};
+  const result: any = {
+    ok: true,
+    global: {
+      rawHealthCount: null as number | null,
+      rawEnergyCount: null as number | null,
+      rawHealthLast10m: null as number | null,
+      rawEnergyLast10m: null as number | null,
+      nowUtc: new Date().toISOString(),
+    },
+    devices: [] as Array<any>,
+  };
+
+  const since10 = new Date(Date.now() - 10 * 60 * 1000);
+
+  try {
+    result.global.rawHealthCount = await prisma.rawHealth.count();
+  } catch (e: any) {
+    errors.rawHealthCount = e?.message || String(e);
+  }
+
+  try {
+    result.global.rawEnergyCount = await prisma.rawEnergy.count();
+  } catch (e: any) {
+    errors.rawEnergyCount = e?.message || String(e);
+  }
+
+  try {
+    result.global.rawHealthLast10m = await prisma.rawHealth.count({ where: { tsUtc: { gte: since10 } } });
+  } catch (e: any) {
+    errors.rawHealthLast10m = e?.message || String(e);
+  }
+
+  try {
+    result.global.rawEnergyLast10m = await prisma.rawEnergy.count({ where: { tsUtc: { gte: since10 } } });
+  } catch (e: any) {
+    errors.rawEnergyLast10m = e?.message || String(e);
+  }
+
+  try {
+    const devs = await prisma.device.findMany({
+      orderBy: { deviceId: "asc" },
+      select: { deviceId: true, name: true },
+    });
+
+    for (const d of devs) {
+      // last health/energy rows (each guarded)
+      let lastH: any = null, lastE: any = null, errH: string | null = null, errE: string | null = null;
+
+      try {
+        lastH = await prisma.rawHealth.findFirst({
+          where: { deviceId: d.deviceId },
+          orderBy: { tsUtc: "desc" },
+        });
+      } catch (e: any) {
+        errH = e?.message || String(e);
+      }
+
+      try {
+        lastE = await prisma.rawEnergy.findFirst({
+          where: { deviceId: d.deviceId },
+          orderBy: { tsUtc: "desc" },
+        });
+      } catch (e: any) {
+        errE = e?.message || String(e);
+      }
+
+      result.devices.push({
+        deviceId: d.deviceId,
+        name: d.name ?? d.deviceId,
+        lastHealthTs: lastH?.tsUtc ?? null,
+        lastEnergyTs: lastE?.tsUtc ?? null,
+        lastPowerW: lastH?.powerW ?? null,
+        lastVoltageV: lastH?.voltageV ?? null,
+        lastCurrentA: lastH?.currentA ?? null,
+        lastAddEleKwh: lastE?.addEleKwh ?? null,
+        _errors: { lastHealth: errH, lastEnergy: errE },
+      });
+    }
+  } catch (e: any) {
+    errors.devices = e?.message || String(e);
+  }
+
+  if (Object.keys(errors).length) {
+    result.ok = false;
+    result.errors = errors;
+  }
+  res.json(result);
+});
+
+/**
+ * GET /api/monitor/schema
+ * Report which tables exist for current DB flavor.
+ */
+r.get("/monitor/schema", async (_req, res) => {
+  const flavor = dbFlavor();
+  const want = [
+    "Device",
+    "RawHealth",
+    "RawEnergy",
+    "DailyKwh",
+    "Rollup1m",
+    "Rollup15m",
+    "Rollup1h",
+    "Event",
+    // add others if you created more
+  ];
+
+  try {
+    let rows: any[] = [];
+    if (flavor === "sqlite") {
+      rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT name FROM sqlite_master WHERE type='table'`
+      );
+      const have = new Set(rows.map(r => r.name));
+      return res.json({ ok: true, db: flavor, tables: want.map(n => ({ name: n, exists: have.has(n) })) });
+    }
+    if (flavor === "mysql") {
+      rows = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT table_name as name FROM information_schema.tables WHERE table_schema = DATABASE()`
+      );
+      const have = new Set(rows.map(r => r.name));
+      return res.json({ ok: true, db: flavor, tables: want.map(n => ({ name: n, exists: have.has(n) })) });
+    }
+    // generic fallback
+    rows = await prisma.$queryRawUnsafe<any[]>(
+      `SELECT 1 as ok`
+    );
+    return res.json({ ok: true, db: flavor, note: "generic check ran", tables: want.map(n => ({ name: n, exists: null })) });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, db: flavor, error: e?.message || String(e) });
+  }
+});
+
+/**
+ * GET /api/monitor/selftest
+ * Quick DB connectivity + Prisma info.
+ */
+r.get("/monitor/selftest", async (_req, res) => {
+  try {
+    const flavor = dbFlavor();
+    const prismaVersion = (require("@prisma/client/package.json") as any)?.version;
+    // Lightweight 'SELECT 1'
+    await prisma.$queryRawUnsafe(`SELECT 1`);
+    res.json({
+      ok: true,
+      db: flavor,
+      prismaVersion,
+      databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+      nowUtc: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({
+      ok: false,
+      error: e?.message || String(e),
+      databaseUrlPresent: Boolean(process.env.DATABASE_URL),
+    });
+  }
+});
+
+export default r;
+
+
+Ensure this router is mounted (e.g., in your route index):
+import monitorRouter from "./monitor"; app.use("/api", monitorRouter);
+
+Frontend patch — client/pages/Monitor.tsx
+
+Update your existing Monitor page to display backend error details (chips) and add a Diagnostics block that shows /schema and /selftest.
+
+Minimal diff (adjust imports/paths to your project):
+
+// client/pages/Monitor.tsx
+import React, { useEffect, useState } from "react";
+
+type Summary = {
+  ok: boolean;
+  global: {
+    rawHealthCount: number | null;
+    rawEnergyCount: number | null;
+    rawHealthLast10m: number | null;
+    rawEnergyLast10m: number | null;
+    nowUtc: string;
+  };
+  devices: Array<{
+    deviceId: string;
+    name: string;
+    lastHealthTs: string | null;
+    lastEnergyTs: string | null;
+    lastPowerW: number | null;
+    lastVoltageV: number | null;
+    lastCurrentA: number | null;
+    lastAddEleKwh: number | null;
+    _errors?: { lastHealth?: string | null; lastEnergy?: string | null };
+  }>;
+  errors?: Record<string, string>;
+};
+
+export default function MonitorPage() {
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [schema, setSchema] = useState<any>(null);
+  const [selftest, setSelftest] = useState<any>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let timer: any;
+    const tick = async () => {
+      try {
+        setErr(null);
+        const [s, sch, st] = await Promise.all([
+          fetch("/api/monitor/ingest-summary").then(r => r.json()),
+          fetch("/api/monitor/schema").then(r => r.json()),
+          fetch("/api/monitor/selftest").then(r => r.json()),
+        ]);
+        setSummary(s);
+        setSchema(sch);
+        setSelftest(st);
+      } catch (e: any) {
+        setErr(e?.message || String(e));
+      } finally {
+        timer = setTimeout(tick, 5000);
+      }
+    };
+    tick();
+    return () => clearTimeout(timer);
+  }, []);
+
+  const ErrorChip = ({ text }: { text: string }) => (
+    <span className="inline-block bg-red-100 text-red-700 text-xs px-2 py-1 rounded mr-2">{text}</span>
+  );
+
+  return (
+    <div className="p-4 space-y-4">
+      <h1 className="text-xl font-semibold">Data Monitor</h1>
+      {err && <div className="text-red-600">Network error: {err}</div>}
+
+      {/* Global */}
+      {summary && (
+        <div className="border rounded p-3">
+          <div className="font-medium mb-2">Global</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="border rounded p-2">
+              <div className="text-gray-500">RawHealth rows</div>
+              <div className="text-lg">{summary.global.rawHealthCount ?? "-"}</div>
+              {summary.errors?.rawHealthCount && <ErrorChip text={summary.errors.rawHealthCount} />}
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">RawEnergy rows</div>
+              <div className="text-lg">{summary.global.rawEnergyCount ?? "-"}</div>
+              {summary.errors?.rawEnergyCount && <ErrorChip text={summary.errors.rawEnergyCount} />}
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">Last 10 min Health</div>
+              <div className="text-lg">{summary.global.rawHealthLast10m ?? "-"}</div>
+              {summary.errors?.rawHealthLast10m && <ErrorChip text={summary.errors.rawHealthLast10m} />}
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">Last 10 min Energy</div>
+              <div className="text-lg">{summary.global.rawEnergyLast10m ?? "-"}</div>
+              {summary.errors?.rawEnergyLast10m && <ErrorChip text={summary.errors.rawEnergyLast10m} />}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Per-device */}
+      {summary && (
+        <div className="border rounded p-3">
+          <div className="font-medium mb-2">Per Device — Last Seen</div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">Device</th>
+                  <th className="py-2 pr-4">Last Health (UTC)</th>
+                  <th className="py-2 pr-4">Last Energy (UTC)</th>
+                  <th className="py-2 pr-4">Power W</th>
+                  <th className="py-2 pr-4">Voltage V</th>
+                  <th className="py-2 pr-4">Current A</th>
+                  <th className="py-2 pr-4">add_ele kWh</th>
+                  <th className="py-2 pr-4">Errors</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.devices.map(d => (
+                  <tr key={d.deviceId} className="border-b">
+                    <td className="py-2 pr-4">
+                      <div className="font-medium">{d.name}</div>
+                      <div className="text-gray-500">{d.deviceId}</div>
+                    </td>
+                    <td className="py-2 pr-4">{d.lastHealthTs ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastEnergyTs ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastPowerW ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastVoltageV ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastCurrentA ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastAddEleKwh ?? "-"}</td>
+                    <td className="py-2 pr-4">
+                      {d._errors?.lastHealth && <ErrorChip text={d._errors.lastHealth} />}
+                      {d._errors?.lastEnergy && <ErrorChip text={d._errors.lastEnergy} />}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Diagnostics */}
+      <div className="border rounded p-3">
+        <div className="font-medium mb-2">Diagnostics</div>
+        <div className="grid md:grid-cols-2 gap-3 text-sm">
+          <div className="border rounded p-2">
+            <div className="font-medium mb-1">Schema</div>
+            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(schema, null, 2)}</pre>
+          </div>
+          <div className="border rounded p-2">
+            <div className="font-medium mb-1">Self Test</div>
+            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(selftest, null, 2)}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+What you should see / how to fix quickly
+
+Visit /api/monitor/selftest
+
+If it 500s with “no such table…” or similar → you likely didn’t run migrations.
+
+Dev (SQLite):
+DATABASE_URL="file:./prisma/dev.db" in .env, then
+npx prisma migrate dev
+
+Prod (MySQL/Hostinger): set DATABASE_URL secret, then
+npx prisma migrate deploy
+
+Visit /api/monitor/schema
+
+Any exists: false → that model’s table wasn’t created. Run migrations as above.
+
+Visit the Monitor page
+
+If some counts are - with red chips, those chips now show the real Prisma error (e.g., “no such table: RawHealth”). Fix by running migrations or adjusting your DATABASE_URL.
+
+Once done, print:
+
+FIX DONE: monitor-robust-diagnostics
+Changed files:
+- server/routes/monitor.ts
+- client/pages/Monitor.tsx
