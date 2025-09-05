@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertDeviceSpecSchema } from "@shared/schema";
+import { insertDeviceSpecSchema, insertDeviceSettingsSchema } from "@shared/schema";
 import { handleAsk, getAskHistory, resetAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
 import energyRouter from "./routes/energy";
@@ -186,6 +186,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete device spec error:", err);
       res.status(500).json({ 
         error: "Failed to delete device specification", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Device settings endpoints
+  // Get all device settings
+  app.get("/api/device-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getAllDeviceSettings();
+      res.json({ success: true, result: settings });
+    } catch (err: any) {
+      console.error("Get device settings error:", err);
+      res.status(500).json({ 
+        error: "Failed to get device settings", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Get device settings by device ID
+  app.get("/api/device-settings/:deviceId", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const settings = await storage.getDeviceSettings(deviceId);
+      if (!settings) {
+        res.status(404).json({ error: "Device settings not found" });
+        return;
+      }
+      res.json({ success: true, result: settings });
+    } catch (err: any) {
+      console.error("Get device settings error:", err);
+      res.status(500).json({ 
+        error: "Failed to get device settings", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Create or update device settings
+  app.post("/api/device-settings", async (req, res) => {
+    try {
+      const validatedData = insertDeviceSettingsSchema.parse(req.body);
+      const settings = await storage.upsertDeviceSettings(validatedData);
+      res.json({ success: true, result: settings });
+    } catch (err: any) {
+      console.error("Upsert device settings error:", err);
+      res.status(500).json({ 
+        error: "Failed to save device settings", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Delete device settings
+  app.delete("/api/device-settings/:deviceId", async (req, res) => {
+    try {
+      const { deviceId } = req.params;
+      const deleted = await storage.deleteDeviceSettings(deviceId);
+      if (!deleted) {
+        res.status(404).json({ error: "Device settings not found" });
+        return;
+      }
+      res.json({ success: true, message: "Device settings deleted" });
+    } catch (err: any) {
+      console.error("Delete device settings error:", err);
+      res.status(500).json({ 
+        error: "Failed to delete device settings", 
         detail: err?.message || String(err),
         timestamp: new Date().toISOString()
       });

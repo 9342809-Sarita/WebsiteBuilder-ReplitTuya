@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, varchar, text, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, serial, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 // Tuya device schema
@@ -45,6 +45,25 @@ export const insertDeviceSpecSchema = createInsertSchema(deviceSpecs).omit({
   updatedAt: true,
 });
 
+// Device settings schema for enable/disable data storage per device
+export const deviceSettings = pgTable("device_settings", {
+  id: serial("id").primaryKey(),
+  deviceId: varchar("device_id", { length: 255 }).notNull().unique(),
+  deviceName: varchar("device_name", { length: 255 }).notNull(),
+  dataStorageEnabled: boolean("data_storage_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Insert schema for device settings
+export const insertDeviceSettingsSchema = createInsertSchema(deviceSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type DeviceSpec = typeof deviceSpecs.$inferSelect;
 export type InsertDeviceSpec = z.infer<typeof insertDeviceSpecSchema>;
+export type DeviceSettings = typeof deviceSettings.$inferSelect;
+export type InsertDeviceSettings = z.infer<typeof insertDeviceSettingsSchema>;

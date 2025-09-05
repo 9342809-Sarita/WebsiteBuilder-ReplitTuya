@@ -45,7 +45,19 @@ export default function ChartsPage() {
     queryKey: ["/api/devices/ui"]
   });
 
-  const devices: Device[] = (devicesData as any)?.devices || [];
+  // Fetch device settings to filter enabled devices
+  const { data: deviceSettingsData } = useQuery({
+    queryKey: ["/api/device-settings"]
+  });
+
+  const allDevices: Device[] = (devicesData as any)?.devices || [];
+  const deviceSettings = (deviceSettingsData as any)?.result || [];
+
+  // Filter devices to only show those with data storage enabled
+  const devices: Device[] = allDevices.filter(device => {
+    const settings = deviceSettings.find((s: any) => s.deviceId === device.deviceId);
+    return settings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
+  });
 
   // Fetch data for selected devices when selection changes
   useEffect(() => {
@@ -173,11 +185,18 @@ export default function ChartsPage() {
                 <Activity className="h-5 w-5" />
                 <span>Device Selection</span>
               </CardTitle>
-              <CardDescription>Click device icons to select/deselect multiple devices for comparison</CardDescription>
+              <CardDescription>Click device icons to select/deselect multiple devices for comparison. Only showing devices with data storage enabled.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {devices.map((device: Device) => {
+              {devices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <h3 className="text-lg font-medium mb-2">No Devices Available</h3>
+                  <p className="text-sm">All devices have data storage disabled. Enable data storage in Settings to view charts.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {devices.map((device: Device) => {
                   const IconComponent = getDeviceIcon(device);
                   const isSelected = selectedDeviceIds.includes(device.deviceId);
                   
@@ -217,8 +236,9 @@ export default function ChartsPage() {
                       )}
                     </div>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
               {selectedDeviceIds.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="text-sm text-muted-foreground">Selected:</span>

@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { tuya } from "../tuya";
 import { normalizeFromStatus, type TuyaStatus } from "../normalize";
 import { detectAnomalies } from "../logic/anomaly";
+import { storage } from "../storage";
 
 const prisma = new PrismaClient();
 
@@ -55,8 +56,12 @@ async function energyTick() {
       // Extract and normalize energy data
       const normalized = normalizeFromStatus(device.status as TuyaStatus);
       
-      // Record energy data if available
-      if (normalized.addEleKwh !== undefined) {
+      // Check if data storage is enabled for this device
+      const deviceSettings = await storage.getDeviceSettings(device.id);
+      const dataStorageEnabled = deviceSettings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
+      
+      // Record energy data if available and storage is enabled
+      if (normalized.addEleKwh !== undefined && dataStorageEnabled) {
         await prisma.rawEnergy.create({
           data: {
             deviceId: device.id,
@@ -119,25 +124,31 @@ async function healthTick() {
       // Extract and normalize health data
       const normalized = normalizeFromStatus(device.status as TuyaStatus);
       
-      // Record health metrics
-      await prisma.rawHealth.create({
-        data: {
-          deviceId: device.id,
-          tsUtc: now,
-          powerW: normalized.powerW,
+      // Check if data storage is enabled for this device
+      const deviceSettings = await storage.getDeviceSettings(device.id);
+      const dataStorageEnabled = deviceSettings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
+      
+      // Record health metrics only if storage is enabled
+      if (dataStorageEnabled) {
+        await prisma.rawHealth.create({
+          data: {
+            deviceId: device.id,
+            tsUtc: now,
+            powerW: normalized.powerW,
+            voltageV: normalized.voltageV,
+            currentA: normalized.currentA,
+            pfEst: normalized.pfEst,
+            online: device.online
+          }
+        });
+
+        // Run anomaly detection only if storage is enabled
+        await detectAnomalies(device.id, {
           voltageV: normalized.voltageV,
-          currentA: normalized.currentA,
           pfEst: normalized.pfEst,
           online: device.online
-        }
-      });
-
-      // Run anomaly detection
-      await detectAnomalies(device.id, {
-        voltageV: normalized.voltageV,
-        pfEst: normalized.pfEst,
-        online: device.online
-      }, now);
+        }, now);
+      }
     }
     
     console.log("[HEALTH] Health tick completed");

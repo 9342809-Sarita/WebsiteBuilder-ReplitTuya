@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getDevices } from "@/lib/api";
@@ -16,7 +18,10 @@ import {
   FileText, 
   Smartphone, 
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Database,
+  ToggleLeft,
+  ToggleRight
 } from "lucide-react";
 import { PageLayout } from "@/components/page-layout";
 
@@ -25,6 +30,15 @@ interface DeviceSpec {
   deviceId: string;
   deviceName: string;
   specification: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DeviceSettings {
+  id: number;
+  deviceId: string;
+  deviceName: string;
+  dataStorageEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -55,10 +69,21 @@ export default function SettingsPage() {
     enabled: false, // Load after devices are loaded
   });
 
+  // Fetch device settings
+  const { 
+    data: settingsData, 
+    isLoading: isLoadingSettings,
+    refetch: refetchSettings 
+  } = useQuery({
+    queryKey: ["/api/device-settings"],
+    enabled: false, // Load after devices are loaded
+  });
+
   const devices: TuyaDevice[] = (devicesData as any)?.result?.devices || 
     (devicesData as any)?.result?.list || (devicesData as any)?.result || [];
 
   const deviceSpecs: DeviceSpec[] = (specsData as any)?.result || [];
+  const deviceSettings: DeviceSettings[] = (settingsData as any)?.result || [];
 
   // Mutation for saving device specifications
   const saveSpecMutation = useMutation({
@@ -109,17 +134,40 @@ export default function SettingsPage() {
     },
   });
 
+  // Mutation for updating device settings
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (data: { deviceId: string; deviceName: string; dataStorageEnabled: boolean }) => {
+      const response = await apiRequest("POST", "/api/device-settings", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-settings"] });
+      toast({
+        title: "Success",
+        description: "Device storage setting updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update device setting",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Load devices on page load
   useEffect(() => {
     refetchDevices();
   }, [refetchDevices]);
 
-  // Load specifications after devices are loaded
+  // Load specifications and settings after devices are loaded
   useEffect(() => {
     if (devices.length > 0) {
       refetchSpecs();
+      refetchSettings();
     }
-  }, [devices.length, refetchSpecs]);
+  }, [devices.length, refetchSpecs, refetchSettings]);
 
   // Initialize specifications state from loaded data
   useEffect(() => {
@@ -175,6 +223,30 @@ export default function SettingsPage() {
     return deviceSpecs.find(spec => spec.deviceId === deviceId);
   };
 
+  const getDeviceStorageEnabled = (deviceId: string): boolean => {
+    const settings = deviceSettings.find(setting => setting.deviceId === deviceId);
+    return settings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
+  };
+
+  const handleToggleDataStorage = (device: TuyaDevice) => {
+    const deviceId = device.id || device.device_id;
+    if (!deviceId) {
+      toast({
+        title: "Error",
+        description: "Device ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const currentEnabled = getDeviceStorageEnabled(deviceId);
+    updateSettingsMutation.mutate({
+      deviceId,
+      deviceName: device.name || 'Unknown Device',
+      dataStorageEnabled: !currentEnabled
+    });
+  };
+
   return (
     <PageLayout 
       title="Device Settings" 
@@ -223,10 +295,101 @@ export default function SettingsPage() {
         )}
 
         {/* Loading State */}
-        {(isLoadingDevices || isLoadingSpecs) && (
+        {(isLoadingDevices || isLoadingSpecs || isLoadingSettings) && (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <RefreshCw className="h-6 w-6 animate-spin mr-3" />
-            <span>Loading {isLoadingDevices ? "devices" : "specifications"}...</span>
+            <span>Loading {isLoadingDevices ? "devices" : isLoadingSpecs ? "specifications" : "settings"}...</span>
+          </div>
+        )}
+
+        {/* Device Data Storage Controls */}
+        {devices.length > 0 && !isLoadingDevices && !isLoadingSettings && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-foreground">Data Storage Controls</h2>
+                <p className="text-muted-foreground">Enable or disable data collection and storage for individual devices</p>
+              </div>
+              <Badge variant="secondary" className="text-sm">
+                {deviceSettings.filter(s => s.dataStorageEnabled).length} of {devices.length} Enabled
+              </Badge>
+            </div>
+
+            <div className="grid gap-4">
+              {devices.map((device) => {
+                const deviceId = device.id || device.device_id || "";
+                const isOnline = device.online === true || device.online === "true";
+                const storageEnabled = getDeviceStorageEnabled(deviceId);
+                const isUpdating = updateSettingsMutation.isPending;
+
+                return (
+                  <Card key={`storage-${deviceId}`} className="shadow-sm">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center justify-center w-10 h-10 bg-blue-500/10 rounded-lg">
+                            <Database className="text-blue-500 h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-foreground">
+                              {device.name || "Unknown Device"}
+                            </h3>
+                            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                              <span>ID: {deviceId}</span>
+                              <span>•</span>
+                              <div className={`flex items-center space-x-1 ${
+                                isOnline ? 'text-green-600' : 'text-gray-500'
+                              }`}>
+                                <div className={`w-2 h-2 rounded-full ${
+                                  isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                }`} />
+                                <span>{isOnline ? 'Online' : 'Offline'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-2">
+                            <Label 
+                              htmlFor={`storage-toggle-${deviceId}`} 
+                              className="text-sm font-medium"
+                            >
+                              Data Storage
+                            </Label>
+                            <Switch
+                              id={`storage-toggle-${deviceId}`}
+                              checked={storageEnabled}
+                              onCheckedChange={() => handleToggleDataStorage(device)}
+                              disabled={isUpdating}
+                              data-testid={`switch-storage-${deviceId}`}
+                            />
+                          </div>
+                          <Badge 
+                            variant={storageEnabled ? "default" : "secondary"}
+                            className="text-xs min-w-[60px] justify-center"
+                          >
+                            {storageEnabled ? "Enabled" : "Disabled"}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {!storageEnabled && (
+                        <div className="mt-4 p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-amber-800 dark:text-amber-200">
+                              <p className="font-medium">Data collection disabled</p>
+                              <p>This device will not appear in Charts or Monitor pages. No energy data will be stored.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
 

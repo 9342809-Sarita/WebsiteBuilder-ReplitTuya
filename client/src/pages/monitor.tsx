@@ -63,6 +63,7 @@ export default function MonitorPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tail, setTail] = useState<TailRow[]>([]);
   const [schema, setSchema] = useState<any>(null);
+  const [deviceSettings, setDeviceSettings] = useState<any[]>([]);
   const [selftest, setSelftest] = useState<any>(null);
   const [storageSize, setStorageSize] = useState<StorageSize | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -91,12 +92,13 @@ export default function MonitorPage() {
     try {
       setIsRefreshing(true);
       setErr(null);
-      const [sRes, tRes, schRes, stRes, szRes] = await Promise.all([
+      const [sRes, tRes, schRes, stRes, szRes, dsRes] = await Promise.all([
         fetch("/api/monitor/ingest-summary"),
         fetch("/api/monitor/latest?limit=50"),
         fetch("/api/monitor/schema"),
         fetch("/api/monitor/selftest"),
         fetch("/api/monitor/storage-size"),
+        fetch("/api/device-settings"),
       ]);
       
       const s = await sRes.json();
@@ -104,9 +106,25 @@ export default function MonitorPage() {
       const sch = await schRes.json();
       const st = await stRes.json();
       const sz = await szRes.json();
+      const ds = await dsRes.json();
       
-      setSummary(s);
-      setTail(t.rows ?? []);
+      const settings = ds.result || [];
+      setDeviceSettings(settings);
+      
+      // Filter devices to only show those with data storage enabled
+      const enabledDevices = s.devices?.filter((device: any) => {
+        const deviceSetting = settings.find((setting: any) => setting.deviceId === device.deviceId);
+        return deviceSetting?.dataStorageEnabled ?? true; // Default to enabled if no settings found
+      }) || [];
+      
+      // Filter tail data to only show data from enabled devices
+      const enabledDeviceIds = new Set(enabledDevices.map((d: any) => d.deviceId));
+      const filteredTailRows = (t.rows ?? []).filter((row: TailRow) => 
+        enabledDeviceIds.has(row.deviceId)
+      );
+      
+      setSummary({ ...s, devices: enabledDevices });
+      setTail(filteredTailRows);
       setSchema(sch);
       setSelftest(st);
       setStorageSize(sz);
@@ -151,7 +169,7 @@ export default function MonitorPage() {
   return (
     <PageLayout 
       title="Data Monitor" 
-      subtitle="Real-time database activity and storage tracking"
+      subtitle="Real-time database activity and storage tracking (only showing devices with data storage enabled)"
       showConnectionStatus={false}
     >
       <div className="space-y-6">
