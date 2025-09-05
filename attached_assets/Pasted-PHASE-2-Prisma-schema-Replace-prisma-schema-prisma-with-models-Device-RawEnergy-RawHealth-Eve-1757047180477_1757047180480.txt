@@ -1,0 +1,97 @@
+PHASE 2 — Prisma schema
+
+Replace prisma/schema.prisma with models: Device, RawEnergy, RawHealth, Event, DailyKwh, Rollup1m, Rollup15m, Rollup1h. Use numeric scales as comments indicate.
+Then:
+
+# .env (dev)
+DATABASE_URL="file:./prisma/dev.db"
+npx prisma migrate dev --name init_logging
+
+
+Print PHASE DONE and the generated client confirmation.
+
+Schema (compact):
+
+datasource db { url = env("DATABASE_URL"); provider = env("DB_PROVIDER") }
+generator client { provider = "prisma-client-js" }
+
+model Device {
+  deviceId      String  @id
+  name          String?
+  productName   String?
+  category      String?
+  firstSeenUtc  DateTime?
+  lastSeenUtc   DateTime?
+  lastOnlineUtc DateTime?
+  lastStatus    Json?
+}
+
+model RawEnergy {
+  id        BigInt  @id @default(autoincrement())
+  deviceId  String
+  tsUtc     DateTime
+  addEleKwh Decimal @db.Decimal(12,4)
+  @@index([deviceId, tsUtc])
+}
+
+model RawHealth {
+  id        BigInt  @id @default(autoincrement())
+  deviceId  String
+  tsUtc     DateTime
+  powerW    Int?
+  voltageV  Decimal? @db.Decimal(6,1)
+  currentA  Decimal? @db.Decimal(6,3)
+  pfEst     Decimal? @db.Decimal(4,3)
+  online    Boolean?
+  @@index([deviceId, tsUtc])
+}
+
+model Event {
+  id       BigInt   @id @default(autoincrement())
+  deviceId String
+  tsUtc    DateTime
+  type     String   // 'SAG','SWELL','OVERCURRENT','OVERPOWER','PF_LOW','OFFLINE','ONLINE'
+  payload  Json?
+  @@index([deviceId, tsUtc])
+}
+
+model DailyKwh {
+  deviceId String
+  dayIst   DateTime
+  kwh      Decimal @db.Decimal(12,4)
+  @@id([deviceId, dayIst])
+}
+
+model Rollup1m {
+  id         BigInt   @id @default(autoincrement())
+  deviceId   String
+  windowUtc  DateTime
+  avgPowerW  Int?
+  minPowerW  Int?
+  maxPowerW  Int?
+  lastAddEle Decimal? @db.Decimal(12,4)
+  kwh        Decimal? @db.Decimal(12,4)
+  @@index([deviceId, windowUtc])
+}
+
+model Rollup15m {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  windowUtc DateTime
+  avgPowerW Int?
+  minPowerW Int?
+  maxPowerW Int?
+  kwh       Decimal? @db.Decimal(12,4)
+  @@index([deviceId, windowUtc])
+}
+
+model Rollup1h {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  windowUtc DateTime
+  avgPowerW Int?
+  minPowerW Int?
+  maxPowerW Int?
+  kwh       Decimal? @db.Decimal(12,4)
+  @@index([deviceId, windowUtc])
+}

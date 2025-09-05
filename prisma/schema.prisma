@@ -1,0 +1,89 @@
+datasource db {
+  url      = env("DATABASE_URL")
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Device {
+  deviceId      String    @id
+  name          String?
+  productName   String?
+  category      String?
+  firstSeenUtc  DateTime?
+  lastSeenUtc   DateTime?
+  lastOnlineUtc DateTime?
+  lastStatus    Json?
+}
+
+model RawEnergy {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  tsUtc     DateTime
+  addEleKwh Decimal
+  @@index([deviceId, tsUtc])
+}
+
+model RawHealth {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  tsUtc     DateTime
+  powerW    Int?
+  voltageV  Decimal?
+  currentA  Decimal?
+  pfEst     Decimal?
+  online    Boolean?
+  @@index([deviceId, tsUtc])
+}
+
+model Event {
+  id       BigInt   @id @default(autoincrement())
+  deviceId String
+  tsUtc    DateTime
+  type     String   // 'SAG','SWELL','OVERCURRENT','OVERPOWER','PF_LOW','OFFLINE','ONLINE'
+  payload  Json?
+  @@index([deviceId, tsUtc])
+}
+
+model DailyKwh {
+  deviceId String
+  dayIst   DateTime
+  kwh      Decimal
+  @@id([deviceId, dayIst])
+}
+
+model Rollup1m {
+  id         BigInt   @id @default(autoincrement())
+  deviceId   String
+  windowUtc  DateTime
+  avgPowerW  Int?
+  minPowerW  Int?
+  maxPowerW  Int?
+  lastAddEle Decimal?
+  kwh        Decimal?
+  @@index([deviceId, windowUtc])
+}
+
+model Rollup15m {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  windowUtc DateTime
+  avgPowerW Int?
+  minPowerW Int?
+  maxPowerW Int?
+  kwh       Decimal?
+  @@index([deviceId, windowUtc])
+}
+
+model Rollup1h {
+  id        BigInt   @id @default(autoincrement())
+  deviceId  String
+  windowUtc DateTime
+  avgPowerW Int?
+  minPowerW Int?
+  maxPowerW Int?
+  kwh       Decimal?
+  @@index([deviceId, windowUtc])
+}
