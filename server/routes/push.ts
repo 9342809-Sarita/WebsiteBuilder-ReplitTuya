@@ -3,7 +3,12 @@ import { saveSubscription, deleteSubscription, getVapidPublicKey } from "../push
 const r = Router();
 
 r.get("/push/public-key", (_req, res) => {
-  res.json({ ok: true, key: getVapidPublicKey() });
+  try {
+    const key = getVapidPublicKey();
+    res.json({ ok: true, key });
+  } catch (error) {
+    res.status(500).json({ ok: false, error: "VAPID keys not configured" });
+  }
 });
 
 r.post("/push/subscribe", async (req, res) => {

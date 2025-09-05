@@ -3,11 +3,14 @@ import webpush from "web-push";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY!;
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
 
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+// Only set VAPID details if keys are available
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 
 export async function saveSubscription(sub: any, userHint?: string) {
   const { endpoint, keys } = sub;
@@ -25,6 +28,10 @@ export async function deleteSubscription(endpoint: string) {
 }
 
 export async function sendPushAll(payload: any) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+    console.warn("VAPID keys not configured, skipping push notifications");
+    return;
+  }
   const subs = await prisma.pushSubscription.findMany({ take: 5000 });
   const msg = JSON.stringify(payload);
   await Promise.all(subs.map(async s => {
@@ -43,4 +50,7 @@ export async function sendPushAll(payload: any) {
   }));
 }
 
-export function getVapidPublicKey() { return VAPID_PUBLIC_KEY; }
+export function getVapidPublicKey() { 
+  if (!VAPID_PUBLIC_KEY) throw new Error("VAPID keys not configured");
+  return VAPID_PUBLIC_KEY; 
+}

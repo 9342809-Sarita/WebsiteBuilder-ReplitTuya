@@ -7,6 +7,15 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
 function useBeep() {
   // WebAudio beep to avoid asset files
   return useMemo(() => {
@@ -29,6 +38,9 @@ export default function AlertsPage() {
   const [form, setForm] = useState<any>({ name: "", deviceId: "", metric: "powerW", op: ">", threshold: 1000, durationS: 0 });
   const [popupOpen, setPopupOpen] = useState(false);
   const [currentEvent, setCurrentEvent] = useState<any | null>(null);
+  const [pushReady, setPushReady] = useState(false);
+  const [pushEndpoint, setPushEndpoint] = useState<string | null>(null);
+  const [userHint, setUserHint] = useState("");
   const beep = useBeep();
 
   const load = async () => {
@@ -81,12 +93,53 @@ export default function AlertsPage() {
     fetch("/api/devices").then(r=>r.json()).then(j=> setDevices(j?.result?.devices || []));
   }, []);
 
+  const subscribePush = async () => {
+    if (!pushReady) return alert("Push not supported");
+    const reg = await navigator.serviceWorker.ready;
+
+    const { key } = await fetch("/api/push/public-key").then(r=>r.json());
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+    setPushEndpoint(sub.endpoint);
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: sub.toJSON(), userHint }),
+    });
+    alert("Push notifications enabled.");
+  };
+
+  const unsubscribePush = async () => {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/api/push/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      });
+      await sub.unsubscribe();
+      setPushEndpoint(null);
+      alert("Push notifications disabled.");
+    }
+  };
+
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       document.addEventListener("click", function once() {
         Notification.requestPermission().finally(() => document.removeEventListener("click", once));
       }, { once: true });
     }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      if (reg) setPushReady(true);
+    })();
   }, []);
 
   useEffect(() => {
@@ -99,6 +152,16 @@ export default function AlertsPage() {
   return (
     <PageLayout>
       <div className="container mx-auto p-4 space-y-6">
+        <Card>
+          <CardHeader><CardTitle>Notifications</CardTitle></CardHeader>
+          <CardContent className="grid sm:grid-cols-3 gap-3">
+            <Input placeholder="Device hint (e.g., Mukesh's Pixel)" value={userHint} onChange={e=>setUserHint(e.target.value)} />
+            <Button onClick={subscribePush} disabled={!pushReady}>Enable Push</Button>
+            <Button variant="secondary" onClick={unsubscribePush} disabled={!pushReady}>Disable Push</Button>
+            {!pushReady && <div className="text-sm text-muted-foreground sm:col-span-3">Push requires HTTPS and a supported browser.</div>}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader><CardTitle>Create Alert Rule</CardTitle></CardHeader>
           <CardContent className="grid sm:grid-cols-3 gap-3">
