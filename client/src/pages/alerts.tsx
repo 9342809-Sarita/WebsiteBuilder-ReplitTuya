@@ -50,15 +50,17 @@ export default function AlertsPage() {
         setCurrentEvent(data.event);
         setPopupOpen(true);
         // optional: Notification API
-        if (Notification && Notification.permission === "granted") {
-          new Notification("Power alert", { body: data.event?.message });
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification("Power alert", {
+            body: data.event?.message || "An alert fired",
+            icon: "/icon-192.png", // add a 192x192 png in your public folder
+            badge: "/badge.png",   // optional small monochrome badge
+            vibrate: [100, 50, 100],
+            data: { route: "/alerts" }
+          } as NotificationOptions);
         }
       } catch {}
     });
-    // request notification permission
-    if (Notification && Notification.permission === "default") {
-      Notification.requestPermission();
-    }
     return () => es.close();
   }, [beep]);
 
@@ -77,6 +79,21 @@ export default function AlertsPage() {
   const [devices, setDevices] = useState<any[]>([]);
   useEffect(() => {
     fetch("/api/devices").then(r=>r.json()).then(j=> setDevices(j?.result?.devices || []));
+  }, []);
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      document.addEventListener("click", function once() {
+        Notification.requestPermission().finally(() => document.removeEventListener("click", once));
+      }, { once: true });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.addEventListener("message", (e) => {
+      // reserved if you later postMessage from SW
+    });
   }, []);
 
   return (
