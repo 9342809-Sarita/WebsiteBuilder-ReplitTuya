@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Menu, Home, BarChart3, Monitor, MessageSquare, Settings, X } from "lucide-react";
+import { Menu, Home, BarChart3, Monitor, MessageSquare, Settings, Database, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 interface NavigationItem {
@@ -12,11 +12,12 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  { href: "/", label: "Home", icon: Home, testId: "nav-home" },
+  { href: "/", label: "Dashboard", icon: Home, testId: "nav-home" },
   { href: "/charts", label: "Charts", icon: BarChart3, testId: "nav-charts" },
   { href: "/monitor", label: "Monitor", icon: Monitor, testId: "nav-monitor" },
   { href: "/ask", label: "AI CHAT", icon: MessageSquare, testId: "nav-ask" },
   { href: "/settings", label: "Settings", icon: Settings, testId: "nav-settings" },
+  { href: "/settings/raw-data", label: "Raw Data", icon: Database, testId: "nav-raw-data" },
 ];
 
 interface ResponsiveNavigationProps {

@@ -68,6 +68,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Live dashboard data (devices + status for online devices)
+  app.get("/api/live-dashboard", async (req, res) => {
+    try {
+      // First get device list
+      const devicesResp = await tuya.request({
+        path: "/v1.0/iot-01/associated-users/devices",
+        method: "GET",
+        query: { page_no: 1, page_size: 100 }
+      });
+
+      const deviceList = (devicesResp as any)?.result?.devices ?? [];
+      const devices = deviceList.map((d: any) => {
+        const deviceId = d.id ?? d.device_id ?? "";
+        return {
+          deviceId,
+          name: d.name ?? deviceId,
+          online: Boolean(d.online)
+        };
+      }).filter((x: any) => x.deviceId);
+
+      // Get status for online devices only
+      const onlineDevices = devices.filter((d: any) => d.online);
+      const statusPromises = onlineDevices.map(async (device: any) => {
+        try {
+          const statusResp = await tuya.request({
+            path: `/v1.0/devices/${device.deviceId}/status`,
+            method: "GET"
+          });
+          
+          const statusData = (statusResp as any)?.result || [];
+          
+          // Extract electrical readings from status data points
+          let powerW = 0, voltageV = 0, currentA = 0, pf = 0;
+          
+          statusData.forEach((dp: any) => {
+            switch (dp.code) {
+              case 'cur_power':
+                powerW = dp.value ? dp.value / 10 : 0; // Convert from 0.1W to W
+                break;
+              case 'cur_voltage':
+                voltageV = dp.value ? dp.value / 10 : 0; // Convert from 0.1V to V
+                break;
+              case 'cur_current':
+                currentA = dp.value ? dp.value / 1000 : 0; // Convert from mA to A
+                break;
+              case 'power_factor':
+                pf = dp.value ? dp.value / 1000 : 0; // Convert to decimal
+                break;
+            }
+          });
+
+          return {
+            deviceId: device.deviceId,
+            name: device.name,
+            online: true,
+            powerW,
+            voltageV,
+            currentA,
+            pf
+          };
+        } catch (err) {
+          // If status fetch fails, still include device but with zeros
+          return {
+            deviceId: device.deviceId,
+            name: device.name,
+            online: false, // Mark as offline if status fetch fails
+            powerW: 0,
+            voltageV: 0,
+            currentA: 0,
+            pf: 0
+          };
+        }
+      });
+
+      const devicesWithStatus = await Promise.all(statusPromises);
+      
+      // Add offline devices with zero readings
+      const offlineDevices = devices.filter((d: any) => !d.online).map((device: any) => ({
+        deviceId: device.deviceId,
+        name: device.name,
+        online: false,
+        powerW: 0,
+        voltageV: 0,
+        currentA: 0,
+        pf: 0
+      }));
+
+      const allDevicesWithStatus = [...devicesWithStatus, ...offlineDevices];
+
+      // Calculate summary
+      const summary = {
+        totalDevices: devices.length,
+        onlineDevices: devices.filter((d: any) => d.online).length,
+        offlineDevices: devices.filter((d: any) => !d.online).length
+      };
+
+      res.json({
+        success: true,
+        summary,
+        devices: allDevicesWithStatus,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (err: any) {
+      console.error("Live dashboard error:", err?.response ?? err);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to get live dashboard data", 
+        detail: err?.message || String(err),
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // Device history logs
   app.get("/api/devices/:id/history", async (req, res) => {
     try {
