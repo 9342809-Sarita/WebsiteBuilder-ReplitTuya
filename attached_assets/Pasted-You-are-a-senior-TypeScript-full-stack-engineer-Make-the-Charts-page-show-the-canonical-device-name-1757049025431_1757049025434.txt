@@ -1,0 +1,181 @@
+You are a senior TypeScript full-stack engineer. Make the Charts page show the canonical device name inside the “Energy Consumption” panel, but do not read it from the Device Selection dropdown. Instead, fetch the device name from the backend database tied to the device’s energy records. Keep changes minimal and well-commented. After finishing, print:
+FIX DONE: energy-consumption-device-name
+and list changed files.
+
+Goal
+
+When a user selects a device on the Charts page and the Energy Consumption view loads, show a heading like:
+
+Energy Consumption — <Device Name>  (<deviceId>)
+
+
+The <Device Name> must come from the backend DB (the Device table you already maintain), not from the dropdown state. To ensure this, the backend /api/daily-kwh endpoint will return the device metadata along with the series, and the frontend will display that value.
+
+1) Backend: include device meta in /api/daily-kwh
+
+Edit your energy routes file (e.g., server/routes/energy.ts). In the GET /api/daily-kwh handler, after you compute rows, look up the device in Prisma and include its name in the JSON.
+
+Patch (additions marked with comments):
+
+// server/routes/energy.ts
+import { Router } from "express";
+import { PrismaClient } from "@prisma/client";
+
+const r = Router();
+const prisma = new PrismaClient();
+
+r.get("/daily-kwh", async (req, res) => {
+  try {
+    const deviceId = String(req.query.deviceId || "");
+    if (!deviceId) return res.status(400).json({ error: "deviceId is required" });
+
+    const start = req.query.startDay ? new Date(String(req.query.startDay)) : new Date(Date.now() - 30*24*60*60*1000);
+    const end   = req.query.endDay ? new Date(String(req.query.endDay)) : new Date();
+
+    const rows = await prisma.dailyKwh.findMany({
+      where: { deviceId, dayIst: { gte: start, lte: end } },
+      orderBy: { dayIst: "asc" }
+    });
+
+    // NEW: fetch canonical device name from DB
+    const dev = await prisma.device.findUnique({ where: { deviceId } });
+    const device = {
+      deviceId,
+      name: dev?.name ?? deviceId, // fallback to id if name missing
+    };
+
+    return res.json({
+      device, // <-- frontend will read the name from here
+      days: rows.map(r => ({ dayIst: r.dayIst, kwh: Number(r.kwh) }))
+    });
+  } catch (e: any) {
+    console.error("[/api/daily-kwh] error:", e);
+    return res.status(500).json({ error: "Failed to load daily kWh" });
+  }
+});
+
+export default r;
+
+
+Acceptance (backend)
+
+Open your browser/devtools and call:
+/api/daily-kwh?deviceId=<YOUR_DEVICE_ID>&startDay=2025-08-01&endDay=2025-09-05
+Response must include:
+
+{
+  "device": { "deviceId": "...", "name": "Your Canonical Name" },
+  "days": [ ... ]
+}
+
+2) Frontend: display the backend name in the Energy Consumption panel
+
+Update the Charts page (or the component that renders the Energy Consumption section). Do not read the label from the dropdown’s option text; read it from the /api/daily-kwh response.
+
+If you already fetch /api/daily-kwh, store the device object from the response and render it in the heading.
+
+Example patch (adjust paths to your project):
+
+// client/pages/Charts.tsx  (or the specific EnergyConsumption component)
+import React, { useEffect, useState } from "react";
+
+type DailyPoint = { dayIst: string; kwh: number };
+type DeviceMeta = { deviceId: string; name: string };
+
+export default function ChartsPage() {
+  const [deviceId, setDeviceId] = useState<string>(""); // already controlled by Device Selection
+  const [daily, setDaily] = useState<DailyPoint[]>([]);
+  const [deviceMeta, setDeviceMeta] = useState<DeviceMeta | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // You likely already have a time range UI; use your existing start/end.
+  const startDay = "2025-08-01";
+  const endDay   = "2025-09-05";
+
+  useEffect(() => {
+    if (!deviceId) {
+      setDaily([]);
+      setDeviceMeta(null);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+        // IMPORTANT: read canonical name from backend response, not from dropdown
+        const res = await fetch(`/api/daily-kwh?deviceId=${encodeURIComponent(deviceId)}&startDay=${startDay}&endDay=${endDay}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!mounted) return;
+        setDaily(Array.isArray(data.days) ? data.days : []);
+        setDeviceMeta(data.device || null); // <-- device.name from DB
+      } catch (e: any) {
+        if (mounted) setErr(e?.message || String(e));
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [deviceId, startDay, endDay]);
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl mb-4">Charts</h1>
+
+      {/* Your existing Device Selector remains unchanged */}
+      {/* <DeviceSelector value={deviceId} onChange={setDeviceId} /> */}
+
+      {/* Energy Consumption panel */}
+      <div className="mt-6 border rounded p-3">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold">
+            Energy Consumption
+            {deviceMeta ? (
+              <> — {deviceMeta.name} <span className="text-gray-500">({deviceMeta.deviceId})</span></>
+            ) : null}
+          </h2>
+          {/* optional: show the chosen date range */}
+          <div className="text-sm text-gray-600">{startDay} → {endDay}</div>
+        </div>
+
+        {loading && <div>Loading…</div>}
+        {err && <div className="text-red-600">Error: {err}</div>}
+
+        {!loading && !err && daily.length === 0 && (
+          <div className="text-gray-600">No energy data for the selected period.</div>
+        )}
+
+        {/* Render your chart with `daily` data here */}
+        {/* <EnergyBarChart data={daily} /> */}
+      </div>
+    </div>
+  );
+}
+
+
+If your Energy Consumption UI is in a separate component (e.g., client/components/EnergyConsumption.tsx), move the deviceMeta state and fetch there instead—just ensure it reads the name from the /api/daily-kwh response.
+
+Acceptance (frontend)
+
+Go to Charts → select a device.
+
+The Energy Consumption block shows:
+Energy Consumption — <Name from DB> (<deviceId>)
+The name must match what’s stored in your backend Device table (or fallback to deviceId if name is unknown).
+
+Change selection → heading updates accordingly.
+
+If you later rename the device in the DB, reloading the chart shows the new name (proves it’s not using the dropdown text).
+
+Optional hardening (only if you want)
+
+If Device row might be missing for a known deviceId, in /api/daily-kwh you can fallback to Tuya (fetch name then upsert) before returning. Keep current patch minimal unless needed.
+
+When done, print exactly:
+
+FIX DONE: energy-consumption-device-name
+Changed files:
+- server/routes/energy.ts
+- client/pages/Charts.tsx  (or your specific EnergyConsumption component path)

@@ -18,6 +18,11 @@ interface DailyKwhDataPoint {
   kwh: number;
 }
 
+interface DeviceMeta {
+  deviceId: string;
+  name: string;
+}
+
 export default function ChartsPage() {
   const [deviceId, setDeviceId] = useState<string>("");
 
@@ -32,6 +37,9 @@ export default function ChartsPage() {
     queryKey: [`/api/daily-kwh?deviceId=${deviceId}`],
     enabled: !!deviceId
   });
+
+  // Extract device metadata from daily kWh response
+  const deviceMeta: DeviceMeta | null = (dailyKwhData as any)?.device || null;
 
   // Process daily power data for chart
   const dailyChartData = (powerSeriesData as any)?.data?.map((point: SeriesDataPoint) => ({
@@ -120,7 +128,12 @@ export default function ChartsPage() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Zap className="h-5 w-5" />
-                <span>Energy Consumption</span>
+                <span>
+                  Energy Consumption
+                  {deviceMeta ? (
+                    <> — {deviceMeta.name} <span className="text-muted-foreground font-normal">({deviceMeta.deviceId})</span></>
+                  ) : null}
+                </span>
               </CardTitle>
               <CardDescription>Power usage and energy consumption patterns</CardDescription>
             </CardHeader>

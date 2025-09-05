@@ -251,7 +251,7 @@ router.get("/events", async (req, res) => {
 
 /**
  * GET /api/daily-kwh?deviceId&startDay&endDay
- * Returns daily kWh consumption data
+ * Returns daily kWh consumption data with device metadata
  */
 router.get("/daily-kwh", async (req, res) => {
   try {
@@ -280,6 +280,15 @@ router.get("/daily-kwh", async (req, res) => {
       }
     });
 
+    // NEW: fetch canonical device name from DB
+    const dev = await prisma.device.findUnique({ 
+      where: { deviceId: deviceId as string } 
+    });
+    const device = {
+      deviceId: deviceId as string,
+      name: dev?.name ?? deviceId as string, // fallback to id if name missing
+    };
+
     const response = dailyKwhData.map(d => ({
       dayIst: d.dayIst.toISOString().split('T')[0], // Return as YYYY-MM-DD format
       kwh: Number(d.kwh)
@@ -287,7 +296,7 @@ router.get("/daily-kwh", async (req, res) => {
 
     res.json({
       success: true,
-      deviceId,
+      device, // <-- frontend will read the name from here
       startDay: startDate.toISOString().split('T')[0],
       endDay: endDate.toISOString().split('T')[0],
       count: response.length,
