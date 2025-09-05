@@ -18,6 +18,30 @@ model Device {
   lastStatus    Json?
 }
 
+model DeviceSettings {
+  id                 Int       @id @default(autoincrement())
+  deviceId           String    @map("device_id")
+  deviceName         String    @map("device_name")
+  dataStorageEnabled Boolean   @map("data_storage_enabled")
+  createdAt          DateTime? @default(now()) @map("created_at")
+  updatedAt          DateTime? @updatedAt @map("updated_at")
+  
+  @@unique([deviceId])
+  @@map("device_settings")
+}
+
+model DeviceSpecs {
+  id            Int       @id @default(autoincrement())
+  deviceId      String    @map("device_id")
+  deviceName    String    @map("device_name")
+  specification String
+  createdAt     DateTime? @default(now()) @map("created_at")
+  updatedAt     DateTime? @updatedAt @map("updated_at")
+  
+  @@unique([deviceId])
+  @@map("device_specs")
+}
+
 model RawEnergy {
   id        BigInt   @id @default(autoincrement())
   deviceId  String
@@ -86,4 +110,33 @@ model Rollup1h {
   maxPowerW Int?
   kwh       Decimal?
   @@index([deviceId, windowUtc])
+}
+
+model AlertRule {
+  id         BigInt   @id @default(autoincrement())
+  name       String
+  deviceId   String
+  metric     String   // 'powerW' | 'voltageV' | 'currentA' | 'pfEst'
+  op         String   // '>' | '>=' | '<' | '<=' | '==' | '!='
+  threshold  Float
+  durationS  Int      // how long condition must hold
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  // optional cooldown to avoid spam (seconds)
+  cooldownS  Int      @default(120)
+  lastFired  DateTime?
+  @@index([deviceId])
+}
+
+model AlertEvent {
+  id        BigInt   @id @default(autoincrement())
+  ruleId    BigInt
+  deviceId  String
+  tsUtc     DateTime
+  value     Float
+  message   String?
+  acked     Boolean  @default(false)
+
+  @@index([deviceId, tsUtc])
 }
