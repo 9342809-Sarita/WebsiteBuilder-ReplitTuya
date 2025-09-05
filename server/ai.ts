@@ -10,7 +10,7 @@ if (process.env.OPENAI_API_KEY) {
   });
 }
 
-export const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+export const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 export const MAX_TOKENS = Number(process.env.MAX_TOKENS || "512");
 
 /**
