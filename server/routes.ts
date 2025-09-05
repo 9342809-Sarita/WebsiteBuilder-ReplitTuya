@@ -4,8 +4,12 @@ import { storage } from "./storage";
 import { insertDeviceSpecSchema } from "@shared/schema";
 import { handleAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
+import energyRouter from "./routes/energy";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  
+  // Mount energy API routes
+  app.use("/api", energyRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
