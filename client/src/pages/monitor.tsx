@@ -41,7 +41,9 @@ type TailRow = {
 type StorageSize = {
   ok: boolean;
   totalSizeBytes: number;
+  totalRows?: number;
   tables?: Record<string, number>;
+  breakdown?: Record<string, any>;
   error?: string;
 };
 
@@ -63,43 +65,65 @@ export default function MonitorPage() {
   const [err, setErr] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [countdown, setCountdown] = useState<number>(5);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Auto-refresh every 5s
+  // Data fetching function
+  const fetchAllData = async () => {
+    try {
+      setIsRefreshing(true);
+      setErr(null);
+      const [sRes, tRes, schRes, stRes, szRes] = await Promise.all([
+        fetch("/api/monitor/ingest-summary"),
+        fetch("/api/monitor/latest?limit=50"),
+        fetch("/api/monitor/schema"),
+        fetch("/api/monitor/selftest"),
+        fetch("/api/monitor/storage-size"),
+      ]);
+      
+      const s = await sRes.json();
+      const t = await tRes.json();
+      const sch = await schRes.json();
+      const st = await stRes.json();
+      const sz = await szRes.json();
+      
+      setSummary(s);
+      setTail(t.rows ?? []);
+      setSchema(sch);
+      setSelftest(st);
+      setStorageSize(sz);
+      setLastUpdate(new Date());
+    } catch (e: any) {
+      setErr(e?.message || String(e));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Auto-refresh with countdown timer
   useEffect(() => {
-    let timer: any;
+    let countdownTimer: any;
+    let refreshTimer: any;
 
-    const tick = async () => {
-      try {
-        setErr(null);
-        const [sRes, tRes, schRes, stRes, szRes] = await Promise.all([
-          fetch("/api/monitor/ingest-summary"),
-          fetch("/api/monitor/latest?limit=50"),
-          fetch("/api/monitor/schema"),
-          fetch("/api/monitor/selftest"),
-          fetch("/api/monitor/storage-size"),
-        ]);
-        
-        const s = await sRes.json();
-        const t = await tRes.json();
-        const sch = await schRes.json();
-        const st = await stRes.json();
-        const sz = await szRes.json();
-        
-        setSummary(s);
-        setTail(t.rows ?? []);
-        setSchema(sch);
-        setSelftest(st);
-        setStorageSize(sz);
-        setLastUpdate(new Date());
-      } catch (e: any) {
-        setErr(e?.message || String(e));
-      } finally {
-        timer = setTimeout(tick, 5000);
-      }
+    // Initial data fetch
+    fetchAllData();
+
+    // Countdown timer - updates every second
+    countdownTimer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          // When countdown reaches 0, refresh and reset to 5
+          fetchAllData();
+          return 5;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(countdownTimer);
+      clearTimeout(refreshTimer);
     };
-
-    tick();
-    return () => clearTimeout(timer);
   }, []);
 
   const ErrorChip = ({ text }: { text: string }) => (
@@ -127,8 +151,25 @@ export default function MonitorPage() {
                 <span>Data Monitor</span>
               </h1>
             </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
+            <div className="flex items-center space-x-4">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
+              </div>
+              <div className="flex items-center space-x-2">
+                {isRefreshing ? (
+                  <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
+                    <Activity className="h-4 w-4 animate-pulse" />
+                    <span className="text-sm font-medium">Refreshing...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-700">
+                    <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                      Refresh in: <span className="font-mono font-bold">{countdown}s</span>
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -191,7 +232,7 @@ export default function MonitorPage() {
                   <span className="inline-flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
                     <HardDrive className="h-3 w-3" />
                     <span>DB: {formatBytes(storageSize.totalSizeBytes)}</span>
-                    {storageSize.totalRows > 0 && (
+                    {storageSize.totalRows && storageSize.totalRows > 0 && (
                       <span>({storageSize.totalRows.toLocaleString()} rows)</span>
                     )}
                   </span>
