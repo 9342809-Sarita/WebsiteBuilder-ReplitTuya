@@ -46,10 +46,11 @@ export async function askLLM({ question, context }: { question: string; context:
   }
 
   console.log("[AI] Processing question:", question);
+  console.log("[AI] Using model:", MODEL, "with max tokens:", MAX_TOKENS);
 
-  const resp = await openai.responses.create({
+  const resp = await openai.chat.completions.create({
     model: MODEL,
-    input: [
+    messages: [
       { role: "system", content: sysPrompt() },
       {
         role: "user",
@@ -58,10 +59,12 @@ export async function askLLM({ question, context }: { question: string; context:
           "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000),
       },
     ],
-    max_output_tokens: MAX_TOKENS,
+    max_completion_tokens: MAX_TOKENS,
   });
 
-  let answer = resp.output_text?.trim() ?? "";
+  let answer = resp.choices?.[0]?.message?.content?.trim() ?? "";
+  console.log("[AI] Response length:", answer.length, "chars");
+  
   if (!answer) {
     console.warn("[AI] Empty content from model, using fallback.");
     answer = "I could not generate a response. Please try again.";
