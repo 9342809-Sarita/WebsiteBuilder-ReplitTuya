@@ -1,0 +1,70 @@
+You are editing the same repo.
+
+Task: Replace OpenAI wrapper to accept full chat history and a system prompt.
+
+Replace entire file server/ai.ts with:
+
+// server/ai.ts
+import OpenAI from "openai";
+
+let openai: OpenAI | null = null;
+
+if (process.env.OPENAI_API_KEY) {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || undefined,
+  });
+}
+
+export const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+export const MAX_TOKENS = Number(process.env.MAX_TOKENS || "512");
+
+// Downsample helper (if you pass graphs/series)
+export function samplePoints<T>(points: T[], N = 800): T[] {
+  if (!Array.isArray(points) || points.length <= N) return points;
+  const step = points.length / N;
+  const out: T[] = [];
+  for (let i = 0; i < points.length; i += step) out.push(points[Math.floor(i)]);
+  return out;
+}
+
+function sysPrompt(): string {
+  return [
+    "You are a smart home device analytics assistant for Tuya Smart Life devices.",
+    "Use ONLY the server-provided JSON context for factual device data.",
+    "Leverage previous turns from this session to keep continuity.",
+    "Be concise; show units (W, A, V, kWh). Note offline/no-data states.",
+  ].join(" ");
+}
+
+export async function askLLMWithHistory({
+  history,
+  userContent,
+}: {
+  history: { role: "user" | "assistant"; content: string }[];
+  userContent: string;
+}): Promise<string> {
+  if (!openai) throw new Error("OpenAI not configured. Set OPENAI_API_KEY.");
+
+  const trimmed = history.slice(-24); // keep last ~12 exchanges
+
+  const messages = [
+    { role: "system" as const, content: sysPrompt() },
+    ...trimmed,
+    { role: "user" as const, content: userContent },
+  ];
+
+  const resp = await openai.chat.completions.create({
+    model: MODEL,
+    messages,
+    max_completion_tokens: MAX_TOKENS,
+  });
+
+  let answer = resp.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!answer) answer = "I couldn't generate a response. Please try again.";
+  return answer;
+}
+
+
+Do not modify any other files yet.
+Return only: “AI wrapper updated.”
