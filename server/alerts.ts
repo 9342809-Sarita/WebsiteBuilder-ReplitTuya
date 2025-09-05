@@ -1,5 +1,6 @@
 // server/alerts.ts
 import { PrismaClient } from "@prisma/client";
+import { sendPushAll } from "./push";
 
 const prisma = new PrismaClient();
 
@@ -79,6 +80,14 @@ export async function evaluateRuleForDevice(ruleId: bigint) {
   });
 
   await prisma.alertRule.update({ where: { id: rule.id }, data: { lastFired: now }});
+  
+  // Send push notifications
+  await sendPushAll({
+    title: "Power alert",
+    body: ev.message || `Alert on ${ev.deviceId}`,
+    url: "/alerts"
+  });
+  
   sseBroadcast("alert", { type: "fired", event: ev });
 }
 
