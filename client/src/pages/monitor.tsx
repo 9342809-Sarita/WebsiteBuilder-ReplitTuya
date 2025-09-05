@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Database, Activity, ChevronDown, ChevronUp, HardDrive } from "lucide-react";
+import { ArrowLeft, Database, Activity, ChevronDown, ChevronUp, HardDrive, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 type Summary = {
   ok: boolean;
@@ -67,6 +70,21 @@ export default function MonitorPage() {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [countdown, setCountdown] = useState<number>(5);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [refreshInterval, setRefreshInterval] = useState<number>(() => {
+    const saved = localStorage.getItem('monitor-refresh-interval');
+    return saved ? parseInt(saved, 10) : 5;
+  });
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  
+  // Update countdown when refresh interval changes
+  useEffect(() => {
+    setCountdown(refreshInterval);
+  }, [refreshInterval]);
+  
+  // Save refresh interval to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('monitor-refresh-interval', refreshInterval.toString());
+  }, [refreshInterval]);
 
   // Data fetching function
   const fetchAllData = async () => {
@@ -103,7 +121,6 @@ export default function MonitorPage() {
   // Auto-refresh with countdown timer
   useEffect(() => {
     let countdownTimer: any;
-    let refreshTimer: any;
 
     // Initial data fetch
     fetchAllData();
@@ -112,9 +129,9 @@ export default function MonitorPage() {
     countdownTimer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          // When countdown reaches 0, refresh and reset to 5
+          // When countdown reaches 0, refresh and reset to configured interval
           fetchAllData();
-          return 5;
+          return refreshInterval;
         }
         return prev - 1;
       });
@@ -122,9 +139,8 @@ export default function MonitorPage() {
 
     return () => {
       clearInterval(countdownTimer);
-      clearTimeout(refreshTimer);
     };
-  }, []);
+  }, [refreshInterval]);
 
   const ErrorChip = ({ text }: { text: string }) => (
     <span className="inline-block bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-xs px-2 py-1 rounded mr-2 font-mono">
@@ -169,6 +185,47 @@ export default function MonitorPage() {
                     </span>
                   </div>
                 )}
+                <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Monitor Settings</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="refresh-interval" className="text-right">
+                          Refresh Interval
+                        </Label>
+                        <div className="col-span-3">
+                          <Select 
+                            value={refreshInterval.toString()} 
+                            onValueChange={(value) => setRefreshInterval(parseInt(value, 10))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1 second</SelectItem>
+                              <SelectItem value="2">2 seconds</SelectItem>
+                              <SelectItem value="5">5 seconds</SelectItem>
+                              <SelectItem value="10">10 seconds</SelectItem>
+                              <SelectItem value="15">15 seconds</SelectItem>
+                              <SelectItem value="30">30 seconds</SelectItem>
+                              <SelectItem value="60">1 minute</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Choose how often the monitor refreshes data from the server.
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
             </div>
           </div>
