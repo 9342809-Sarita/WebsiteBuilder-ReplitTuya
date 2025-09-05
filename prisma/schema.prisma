@@ -140,3 +140,12 @@ model AlertEvent {
 
   @@index([deviceId, tsUtc])
 }
+
+model PushSubscription {
+  id         BigInt   @id @default(autoincrement())
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+  userHint   String?   // optional: "Mukesh's Pixel 7", etc.
+}
