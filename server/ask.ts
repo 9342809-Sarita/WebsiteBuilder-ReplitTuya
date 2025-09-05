@@ -5,23 +5,12 @@ import { getHistory, appendMessage, resetSession } from "./chat-store";
 
 // Build a compact context object; wire in your existing stats calls if needed
 async function buildContext(req: Request) {
-  const url = new URL(req.originalUrl, `http://${req.headers.host}`);
-  const params = url.searchParams;
-
-  const deviceIds = (params.get("deviceIds") || "")
-    .split(",")
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  const gran = params.get("gran") || "day";
-  const start = params.get("start") || "";
-  const end = params.get("end") || "";
-
+  // For now, return a minimal context since we removed the complex data fetching
   const context = {
-    timeRange: { start, end },
-    granularity: gran,
-    devicesQueried: deviceIds,
-    // Add downsampled series/summary objects here if available
+    timeRange: { start: "", end: "" },
+    granularity: "day",
+    devicesQueried: [],
+    timestamp: new Date().toISOString(),
   };
 
   return context;

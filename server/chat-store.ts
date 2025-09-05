@@ -21,9 +21,9 @@ function now() { return Date.now(); }
 
 function pruneOldSessions() {
   const cutoff = now() - TTL_MS;
-  for (const [sid, s] of SESSIONS) {
+  SESSIONS.forEach((s, sid) => {
     if (s.lastActive < cutoff) SESSIONS.delete(sid);
-  }
+  });
 }
 
 export function getHistory(sessionId: string): ChatMessage[] {
