@@ -35,17 +35,6 @@ export function PageLayout({
       <header className="bg-card border-b border-border shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            {/* Mobile: Hamburger Menu */}
-            <div className="md:hidden">
-              <ResponsiveNavigation 
-                connectionStatus={showConnectionStatus && isConnected !== undefined ? {
-                  isConnected,
-                  label: isConnected ? "Connected" : "Disconnected"
-                } : undefined}
-                showOnlyHamburger={true}
-              />
-            </div>
-            
             {/* Logo and Title */}
             <div className="flex items-center space-x-3 min-w-0 flex-shrink-0">
               <Link href="/">
@@ -63,24 +52,13 @@ export function PageLayout({
               </div>
             </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:block">
-              <ResponsiveNavigation 
-                connectionStatus={showConnectionStatus && isConnected !== undefined ? {
-                  isConnected,
-                  label: isConnected ? "Connected" : "Disconnected"
-                } : undefined}
-                showOnlyHamburger={false}
-              />
-            </div>
-            
-            {/* Mobile: AI CHAT Button */}
-            <div className="md:hidden">
-              <ResponsiveNavigation 
-                connectionStatus={undefined}
-                showOnlyAIChat={true}
-              />
-            </div>
+            {/* Navigation */}
+            <ResponsiveNavigation 
+              connectionStatus={showConnectionStatus && isConnected !== undefined ? {
+                isConnected,
+                label: isConnected ? "Connected" : "Disconnected"
+              } : undefined}
+            />
           </div>
         </div>
       </header>
