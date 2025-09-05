@@ -21,7 +21,8 @@ import {
   Smartphone,
   Zap,
   Settings,
-  MessageSquare
+  MessageSquare,
+  BarChart3
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -158,6 +159,12 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Link href="/charts">
+                <Button variant="outline" size="sm" data-testid="link-charts">
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  Charts
+                </Button>
+              </Link>
               <Link href="/ask">
                 <Button variant="outline" size="sm" data-testid="link-ask">
                   <MessageSquare className="mr-2 h-4 w-4" />
