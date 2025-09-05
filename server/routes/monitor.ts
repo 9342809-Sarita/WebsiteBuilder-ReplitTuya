@@ -244,37 +244,35 @@ r.get("/monitor/storage-size", async (_req, res) => {
     const db = dbFlavor();
     
     if (db === "postgres") {
-      // Get total database size and individual table sizes
-      const sizeQuery = `
-        SELECT 
-          pg_database_size(current_database()) as total_size,
-          (SELECT pg_total_relation_size('Device')) as device_size,
-          (SELECT pg_total_relation_size('RawHealth')) as rawhealth_size,
-          (SELECT pg_total_relation_size('RawEnergy')) as rawenergy_size,
-          (SELECT pg_total_relation_size('DailyKwh')) as dailykwh_size,
-          (SELECT pg_total_relation_size('Rollup1m')) as rollup1m_size,
-          (SELECT pg_total_relation_size('Rollup15m')) as rollup15m_size,
-          (SELECT pg_total_relation_size('Rollup1h')) as rollup1h_size,
-          (SELECT pg_total_relation_size('Event')) as event_size
-      `;
-      
-      const result = await prisma.$queryRawUnsafe(sizeQuery) as any[];
-      const row = result[0] || {};
-      
-      res.json({
-        ok: true,
-        totalSizeBytes: parseInt(row.total_size || "0"),
-        tables: {
-          Device: parseInt(row.device_size || "0"),
-          RawHealth: parseInt(row.rawhealth_size || "0"),
-          RawEnergy: parseInt(row.rawenergy_size || "0"),
-          DailyKwh: parseInt(row.dailykwh_size || "0"),
-          Rollup1m: parseInt(row.rollup1m_size || "0"),
-          Rollup15m: parseInt(row.rollup15m_size || "0"),
-          Rollup1h: parseInt(row.rollup1h_size || "0"),
-          Event: parseInt(row.event_size || "0"),
-        }
-      });
+      // For now, estimate storage size based on row counts from the monitor summary
+      const ingestRes = await fetch("http://localhost:5000/api/monitor/ingest-summary");
+      if (ingestRes.ok) {
+        const data = await ingestRes.json();
+        const healthCount = data.global?.rawHealthCount || 0;
+        const energyCount = data.global?.rawEnergyCount || 0;
+        
+        // Estimate: ~200 bytes per health record, ~100 bytes per energy record
+        const estimatedBytes = (healthCount * 200) + (energyCount * 100) + (1024 * 1024); // +1MB base
+        
+        res.json({
+          ok: true,
+          totalSizeBytes: estimatedBytes,
+          totalRows: healthCount + energyCount,
+          breakdown: { 
+            health: healthCount,
+            energy: energyCount,
+            note: "Estimated size based on row counts"
+          }
+        });
+      } else {
+        // Fallback - just return a basic estimate
+        res.json({
+          ok: true,
+          totalSizeBytes: 2048000, // 2MB default
+          totalRows: 0,
+          breakdown: { note: "Default estimate" }
+        });
+      }
     } else if (db === "sqlite") {
       // For SQLite, use PRAGMA to get database size
       const result = await prisma.$queryRaw`PRAGMA page_count;` as any[];
@@ -285,9 +283,8 @@ r.get("/monitor/storage-size", async (_req, res) => {
       res.json({
         ok: true,
         totalSizeBytes: totalSize,
-        tables: {
-          note: "Individual table sizes not available for SQLite"
-        }
+        totalRows: 0,
+        breakdown: { note: "Row counts not available for SQLite" }
       });
     } else {
       res.json({

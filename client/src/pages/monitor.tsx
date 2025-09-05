@@ -186,7 +186,19 @@ export default function MonitorPage() {
                 </div>
               </div>
               <div className="text-xs text-muted-foreground mt-4">
-                Current time (UTC): {summary.global.nowUtc}
+                Current time (UTC): {summary.global.nowUtc} | 
+                {storageSize?.ok && (
+                  <span className="inline-flex items-center space-x-1 text-emerald-600 dark:text-emerald-400">
+                    <HardDrive className="h-3 w-3" />
+                    <span>DB: {formatBytes(storageSize.totalSizeBytes)}</span>
+                    {storageSize.totalRows > 0 && (
+                      <span>({storageSize.totalRows.toLocaleString()} rows)</span>
+                    )}
+                  </span>
+                )}
+                {storageSize?.error && (
+                  <span className="text-red-600 dark:text-red-400">Storage: Error</span>
+                )}
               </div>
             </CardContent>
           </Card>
