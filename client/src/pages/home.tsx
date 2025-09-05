@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,11 @@ interface LiveDashboardData {
   timestamp: string;
 }
 
+type FilterType = 'total' | 'online' | 'offline';
+
 export default function HomePage() {
+  // Filter state - default to "online" as requested
+  const [deviceFilter, setDeviceFilter] = useState<FilterType>('online');
   // Live dashboard data query
   const { 
     data: dashboardData, 
@@ -53,7 +58,25 @@ export default function HomePage() {
     offlineDevices: 0
   };
 
-  const onlineDevices = dashboardData?.devices?.filter(d => d.online) || [];
+  const allDevices = dashboardData?.devices || [];
+  const onlineDevices = allDevices.filter(d => d.online);
+  const offlineDevices = allDevices.filter(d => !d.online);
+
+  // Filter devices based on selected filter
+  const getFilteredDevices = () => {
+    switch (deviceFilter) {
+      case 'total':
+        return allDevices;
+      case 'online':
+        return onlineDevices;
+      case 'offline':
+        return offlineDevices;
+      default:
+        return onlineDevices;
+    }
+  };
+
+  const filteredDevices = getFilteredDevices();
 
   const handleRefresh = () => {
     refetch();
@@ -89,7 +112,13 @@ export default function HomePage() {
     >
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
-        <Card className="shadow-sm">
+        <Card 
+          className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${
+            deviceFilter === 'total' ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
+          }`}
+          onClick={() => setDeviceFilter('total')}
+          data-testid="card-total-devices"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Devices
@@ -106,7 +135,13 @@ export default function HomePage() {
           </CardContent>
         </Card>
         
-        <Card className="shadow-sm">
+        <Card 
+          className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${
+            deviceFilter === 'online' ? 'ring-2 ring-green-500 bg-green-50' : 'hover:bg-muted/50'
+          }`}
+          onClick={() => setDeviceFilter('online')}
+          data-testid="card-online-devices"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Online Devices
@@ -123,7 +158,13 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
+        <Card 
+          className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${
+            deviceFilter === 'offline' ? 'ring-2 ring-red-500 bg-red-50' : 'hover:bg-muted/50'
+          }`}
+          onClick={() => setDeviceFilter('offline')}
+          data-testid="card-offline-devices"
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Offline Devices
@@ -144,9 +185,15 @@ export default function HomePage() {
       {/* Refresh Control */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-semibold">Live Device Status</h2>
+          <h2 className="text-xl font-semibold">
+            {deviceFilter === 'total' && 'All Devices'}
+            {deviceFilter === 'online' && 'Online Devices'}
+            {deviceFilter === 'offline' && 'Offline Devices'}
+          </h2>
           <p className="text-sm text-muted-foreground">
-            Real-time electrical readings from online devices
+            {deviceFilter === 'total' && 'Showing all registered devices'}
+            {deviceFilter === 'online' && 'Real-time electrical readings from online devices'}
+            {deviceFilter === 'offline' && 'Devices that are currently not responding'}
           </p>
         </div>
         <Button 
@@ -161,7 +208,7 @@ export default function HomePage() {
         </Button>
       </div>
 
-      {/* Online Devices Grid */}
+      {/* Filtered Devices Grid */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {[1, 2, 3].map((i) => (
@@ -177,19 +224,27 @@ export default function HomePage() {
             </Card>
           ))}
         </div>
-      ) : onlineDevices.length === 0 ? (
+      ) : filteredDevices.length === 0 ? (
         <Card className="shadow-sm">
           <CardContent className="flex items-center justify-center py-16">
             <div className="text-center text-muted-foreground">
               <Zap className="h-16 w-16 mx-auto mb-4 opacity-30" />
-              <h3 className="text-lg font-medium mb-2">No Online Devices</h3>
-              <p className="text-sm">All devices are currently offline or not responding</p>
+              <h3 className="text-lg font-medium mb-2">
+                {deviceFilter === 'total' && 'No Devices Found'}
+                {deviceFilter === 'online' && 'No Online Devices'}
+                {deviceFilter === 'offline' && 'No Offline Devices'}
+              </h3>
+              <p className="text-sm">
+                {deviceFilter === 'total' && 'No devices are registered in the system'}
+                {deviceFilter === 'online' && 'All devices are currently offline or not responding'}
+                {deviceFilter === 'offline' && 'All devices are currently online and responding'}
+              </p>
             </div>
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {onlineDevices.map((device) => (
+          {filteredDevices.map((device) => (
             <Card key={device.deviceId} className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -204,10 +259,16 @@ export default function HomePage() {
                   </div>
                   <Badge 
                     variant="default"
-                    className="bg-green-100 text-green-800 hover:bg-green-200 flex-shrink-0"
+                    className={`flex-shrink-0 ${
+                      device.online 
+                        ? "bg-green-100 text-green-800 hover:bg-green-200" 
+                        : "bg-red-100 text-red-800 hover:bg-red-200"
+                    }`}
                   >
-                    <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
-                    Online
+                    <div className={`w-2 h-2 rounded-full mr-1 ${
+                      device.online ? "bg-green-500" : "bg-red-500"
+                    }`} />
+                    {device.online ? "Online" : "Offline"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -219,7 +280,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Power</span>
                   </div>
                   <span className="text-lg font-bold text-yellow-600" data-testid={`power-${device.deviceId}`}>
-                    {device.powerW.toFixed(1)} W
+                    {device.online ? device.powerW.toFixed(1) : '0.0'} W
                   </span>
                 </div>
 
@@ -230,7 +291,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Voltage</span>
                   </div>
                   <span className="text-lg font-bold text-blue-600" data-testid={`voltage-${device.deviceId}`}>
-                    {device.voltageV.toFixed(1)} V
+                    {device.online ? device.voltageV.toFixed(1) : '0.0'} V
                   </span>
                 </div>
 
@@ -241,7 +302,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Current</span>
                   </div>
                   <span className="text-lg font-bold text-orange-600" data-testid={`current-${device.deviceId}`}>
-                    {device.currentA.toFixed(3)} A
+                    {device.online ? device.currentA.toFixed(3) : '0.000'} A
                   </span>
                 </div>
 
@@ -252,7 +313,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Power Factor</span>
                   </div>
                   <span className="text-lg font-bold text-purple-600" data-testid={`pf-${device.deviceId}`}>
-                    {device.pf.toFixed(3)}
+                    {device.online ? device.pf.toFixed(3) : '0.000'}
                   </span>
                 </div>
               </CardContent>
