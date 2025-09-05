@@ -60,8 +60,9 @@ async function energyTick() {
       const deviceSettings = await storage.getDeviceSettings(device.id);
       const dataStorageEnabled = deviceSettings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
       
-      // Record energy data if available and storage is enabled
-      if (normalized.addEleKwh !== undefined && dataStorageEnabled) {
+      // Record energy data if available, storage is enabled, and device is online
+      // Offline devices don't consume energy so we skip recording
+      if (normalized.addEleKwh !== undefined && dataStorageEnabled && device.online) {
         await prisma.rawEnergy.create({
           data: {
             deviceId: device.id,
@@ -124,6 +125,15 @@ async function healthTick() {
       // Extract and normalize health data
       const normalized = normalizeFromStatus(device.status as TuyaStatus);
       
+      // If device is offline, zero out all electrical readings since device is powered off or disconnected
+      const finalValues = device.online ? normalized : {
+        powerW: 0,
+        voltageV: 0,
+        currentA: 0,
+        pfEst: 0,
+        addEleKwh: 0
+      };
+      
       // Check if data storage is enabled for this device
       const deviceSettings = await storage.getDeviceSettings(device.id);
       const dataStorageEnabled = deviceSettings?.dataStorageEnabled ?? true; // Default to enabled if no settings found
@@ -134,18 +144,18 @@ async function healthTick() {
           data: {
             deviceId: device.id,
             tsUtc: now,
-            powerW: normalized.powerW,
-            voltageV: normalized.voltageV,
-            currentA: normalized.currentA,
-            pfEst: normalized.pfEst,
+            powerW: finalValues.powerW,
+            voltageV: finalValues.voltageV,
+            currentA: finalValues.currentA,
+            pfEst: finalValues.pfEst,
             online: device.online
           }
         });
 
         // Run anomaly detection only if storage is enabled
         await detectAnomalies(device.id, {
-          voltageV: normalized.voltageV,
-          pfEst: normalized.pfEst,
+          voltageV: finalValues.voltageV,
+          pfEst: finalValues.pfEst,
           online: device.online
         }, now);
       }
