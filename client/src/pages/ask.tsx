@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Send, Trash2, Loader2, ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+import { PageLayout } from "@/components/page-layout";
+import { MessageSquare, Send, Trash2, Loader2 } from "lucide-react";
 
 type Role = "user" | "assistant";
 type ChatMessage = { role: Role; content: string; ts: number };
@@ -77,7 +77,7 @@ export default function AskPage() {
     }
   };
 
-  const resetChat = async () => {
+  const clearChat = async () => {
     try {
       const r = await fetch("/api/ask/reset", {
         method: "POST",
@@ -90,59 +90,130 @@ export default function AskPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-4xl p-4 md:p-8">
-        <div className="flex items-center gap-2 mb-4">
-          <Link href="/"><Button variant="ghost" size="icon"><ArrowLeft className="w-4 h-4" /></Button></Link>
-          <h1 className="text-2xl font-semibold flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" /> Ask AI
-          </h1>
-        </div>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Chat (session scoped)</CardTitle>
-            <Button variant="outline" size="sm" onClick={resetChat} disabled={isLoading}>
-              <Trash2 className="w-4 h-4 mr-1" /> Clear chat
-            </Button>
+    <PageLayout 
+      title="Ask AI Assistant" 
+      subtitle="Chat with AI about your devices and get insights"
+    >
+      <div className="max-w-4xl mx-auto">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+              <CardTitle className="text-lg flex items-center space-x-2">
+                <MessageSquare className="h-5 w-5" />
+                <span>AI Assistant</span>
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearChat}
+                disabled={messages.length === 0 || isLoading}
+                data-testid="button-clear-chat"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                <span className="hidden sm:inline">Clear Chat</span>
+                <span className="sm:hidden">Clear</span>
+              </Button>
+            </div>
           </CardHeader>
 
-          <CardContent>
-            <div ref={scrollerRef} className="h-[60vh] overflow-y-auto rounded-lg border p-3 space-y-3">
+          <CardContent className="p-4 sm:p-6">
+            {/* Chat Messages */}
+            <div 
+              ref={scrollerRef} 
+              className="h-[50vh] sm:h-[60vh] overflow-y-auto rounded-lg border bg-muted/30 p-3 sm:p-4 space-y-3 mb-4"
+            >
               {messages.length === 0 && (
-                <Alert><AlertDescription>Start a conversation below. Messages are remembered during this session.</AlertDescription></Alert>
+                <Alert className="border-dashed">
+                  <AlertDescription className="text-sm">
+                    Start a conversation below. Ask about your devices, energy usage, status, or any insights. 
+                    Messages are remembered during this session.
+                  </AlertDescription>
+                </Alert>
               )}
 
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className={`max-w-[85%] whitespace-pre-wrap px-3 py-2 rounded-2xl shadow-sm text-sm
-                    ${m.role === "user" ? "bg-primary text-primary-foreground rounded-br-none" : "bg-muted rounded-bl-none"}`}>
-                    {m.content}
+                  <div className={`max-w-[90%] sm:max-w-[85%] rounded-2xl px-3 py-2 shadow-sm text-sm break-words ${
+                    m.role === "user" 
+                      ? "bg-primary text-primary-foreground rounded-br-none" 
+                      : "bg-card border border-border rounded-bl-none"
+                  }`}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-medium ${
+                        m.role === "user" 
+                          ? "text-primary-foreground/70" 
+                          : "text-muted-foreground"
+                      }`}>
+                        {m.role === "user" ? "You" : "AI"}
+                      </span>
+                      <span className={`text-xs ${
+                        m.role === "user" 
+                          ? "text-primary-foreground/50" 
+                          : "text-muted-foreground/60"
+                      }`}>
+                        {new Date(m.ts).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="whitespace-pre-wrap leading-relaxed">
+                      {m.content}
+                    </div>
                   </div>
                 </div>
               ))}
 
-              {isLoading && <div className="text-sm text-muted-foreground">Thinking…</div>}
+              {isLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-card border border-border rounded-2xl rounded-bl-none px-3 py-2 shadow-sm max-w-[90%] sm:max-w-[85%]">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>AI is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
+            {/* Input Area */}
+            <div className="space-y-3">
               <Textarea
-                placeholder="Ask about your devices, energy, status… (Shift+Enter for newline)"
+                placeholder="Ask about your devices, energy, status, insights... (Shift+Enter for newline)"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKey}
                 rows={3}
+                className="resize-none text-sm sm:text-base"
+                disabled={isLoading}
+                data-testid="textarea-question"
               />
-              <div className="flex gap-2 justify-end">
-                <Button onClick={ask} disabled={isLoading || input.trim().length === 0}>
-                  {isLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
-                  Send
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-between sm:items-center gap-2">
+                <div className="text-xs text-muted-foreground">
+                  {messages.length > 0 && (
+                    <span>Session: {sessionId.slice(0, 8)}...</span>
+                  )}
+                </div>
+                <Button 
+                  onClick={ask} 
+                  disabled={isLoading || input.trim().length === 0}
+                  className="w-full sm:w-auto"
+                  data-testid="button-send-question"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" /> 
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" /> 
+                      Send
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

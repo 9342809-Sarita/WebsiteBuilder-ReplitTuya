@@ -19,12 +19,9 @@ import {
   AlertCircle,
   Monitor,
   Smartphone,
-  Zap,
-  Settings,
-  MessageSquare,
-  BarChart3
+  Zap
 } from "lucide-react";
-import { Link } from "wouter";
+import { ResponsiveNavigation } from "@/components/responsive-navigation";
 
 export default function HomePage() {
   const [selectedDevice, setSelectedDevice] = useState<TuyaDevice | null>(null);
@@ -158,57 +155,32 @@ export default function HomePage() {
                 <p className="text-sm text-muted-foreground">Read-only Smart Life device viewer</p>
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <Link href="/charts">
-                <Button variant="outline" size="sm" data-testid="link-charts">
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  Charts
-                </Button>
-              </Link>
-              <Link href="/monitor">
-                <Button variant="outline" size="sm" data-testid="link-monitor">
-                  <Monitor className="mr-2 h-4 w-4" />
-                  Monitor
-                </Button>
-              </Link>
-              <Link href="/ask">
-                <Button variant="outline" size="sm" data-testid="link-ask">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Ask AI
-                </Button>
-              </Link>
-              <Link href="/settings">
-                <Button variant="outline" size="sm" data-testid="link-settings">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </Button>
-              </Link>
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"}`} />
-                <span data-testid="connection-status">
-                  {isConnected ? "Connected" : "Disconnected"}
-                </span>
-              </div>
-            </div>
+            <ResponsiveNavigation 
+              connectionStatus={{
+                isConnected,
+                label: isConnected ? "Connected" : "Disconnected"
+              }}
+            />
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
         {/* Controls */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <Card className="shadow-sm">
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
-                <div>
+                <div className="min-w-0">
                   <CardTitle className="text-lg mb-1">Device Management</CardTitle>
-                  <CardDescription>Monitor your Smart Life devices and their current status</CardDescription>
+                  <CardDescription className="text-sm">Monitor your Smart Life devices and their current status</CardDescription>
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                   <Button 
                     onClick={handleFetchDevices}
                     disabled={isLoadingDevices}
                     data-testid="button-fetch-devices"
+                    className="w-full sm:w-auto"
                   >
                     {isLoadingDevices ? (
                       <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -222,6 +194,7 @@ export default function HomePage() {
                     onClick={handleRefreshAll}
                     disabled={isLoadingDevices}
                     data-testid="button-refresh-all"
+                    className="w-full sm:w-auto"
                   >
                     <RotateCcw className={`mr-2 h-4 w-4 ${isLoadingDevices ? 'animate-spin' : ''}`} />
                     Refresh All
@@ -245,7 +218,7 @@ export default function HomePage() {
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <StatsCard
             title="Total Devices"
             value={totalDevices}
@@ -277,7 +250,7 @@ export default function HomePage() {
         </div>
 
         {/* Two Panel Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
           {/* Left Panel - Device List */}
           <div className="lg:col-span-1">
             <Card className="shadow-sm">
