@@ -1,73 +1,60 @@
+// server/ai.ts
 import OpenAI from "openai";
 
 let openai: OpenAI | null = null;
 
-// Only initialize OpenAI if API key is provided
 if (process.env.OPENAI_API_KEY) {
   openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL || undefined
+    baseURL: process.env.OPENAI_BASE_URL || undefined,
   });
 }
 
 export const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 export const MAX_TOKENS = Number(process.env.MAX_TOKENS || "512");
 
-/**
- * Helper to clamp/summarize arrays so prompts stay small.
- * Keeps at most N points uniformly sampled.
- */
-export function samplePoints(points: any[] = [], N = 200): any[] {
+// Downsample helper (if you pass graphs/series)
+export function samplePoints<T>(points: T[], N = 800): T[] {
   if (!Array.isArray(points) || points.length <= N) return points;
   const step = points.length / N;
-  const out = [];
-  for (let i = 0; i < points.length; i += step) {
-    out.push(points[Math.floor(i)]);
-  }
+  const out: T[] = [];
+  for (let i = 0; i < points.length; i += step) out.push(points[Math.floor(i)]);
   return out;
 }
 
 function sysPrompt(): string {
   return [
     "You are a smart home device analytics assistant for Tuya Smart Life devices.",
-    "You have access to real-time device data including power consumption, status, and user specifications.",
-    "Answer questions using ONLY the JSON context data provided by the server.",
-    "Provide specific details like device names, power readings, online/offline status, and energy consumption.",
-    "Format electrical measurements clearly (Watts, Amps, Volts, kWh).",
-    "If a device is offline or has no data, mention that specifically.",
-    "Give practical insights and recommendations when appropriate.",
-    "Use bullet points and clear formatting for easy reading."
+    "Use ONLY the server-provided JSON context for factual device data.",
+    "Leverage previous turns from this session to keep continuity.",
+    "Be concise; show units (W, A, V, kWh). Note offline/no-data states.",
   ].join(" ");
 }
 
-export async function askLLM({ question, context }: { question: string; context: any }): Promise<string> {
-  if (!openai) {
-    throw new Error("OpenAI not configured. Please set OPENAI_API_KEY environment variable.");
-  }
+export async function askLLMWithHistory({
+  history,
+  userContent,
+}: {
+  history: { role: "user" | "assistant"; content: string }[];
+  userContent: string;
+}): Promise<string> {
+  if (!openai) throw new Error("OpenAI not configured. Set OPENAI_API_KEY.");
 
-  console.log("[AI] Processing question:", question);
-  console.log("[AI] Using model:", MODEL, "with max tokens:", MAX_TOKENS);
+  const trimmed = history.slice(-24); // keep last ~12 exchanges
+
+  const messages = [
+    { role: "system" as const, content: sysPrompt() },
+    ...trimmed,
+    { role: "user" as const, content: userContent },
+  ];
 
   const resp = await openai.chat.completions.create({
     model: MODEL,
-    messages: [
-      { role: "system", content: sysPrompt() },
-      {
-        role: "user",
-        content:
-          "Question:\n" + question +
-          "\n\nContext JSON (compact):\n" + JSON.stringify(context).slice(0, 120_000),
-      },
-    ],
+    messages,
     max_completion_tokens: MAX_TOKENS,
   });
 
   let answer = resp.choices?.[0]?.message?.content?.trim() ?? "";
-  console.log("[AI] Response length:", answer.length, "chars");
-  
-  if (!answer) {
-    console.warn("[AI] Empty content from model, using fallback.");
-    answer = "I could not generate a response. Please try again.";
-  }
+  if (!answer) answer = "I couldn't generate a response. Please try again.";
   return answer;
 }
