@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDeviceSpecSchema } from "@shared/schema";
-import { handleAsk } from "./ask";
+import { handleAsk, getAskHistory, resetAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
 import energyRouter from "./routes/energy";
 import devicesUiRouter from "./routes/devices-ui";
@@ -192,8 +192,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Ask AI endpoint
-  app.get("/api/ask", handleAsk);
+  // Ask AI endpoints
+  app.get("/api/ask", handleAsk);     // keep GET for backward-compat
+  app.post("/api/ask", handleAsk);    // preferred
+  app.get("/api/ask/history", getAskHistory);
+  app.post("/api/ask/reset", resetAsk);
 
   const httpServer = createServer(app);
   return httpServer;
