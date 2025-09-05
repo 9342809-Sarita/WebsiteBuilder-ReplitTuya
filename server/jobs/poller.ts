@@ -3,6 +3,7 @@ import { tuya } from "../tuya";
 import { normalizeFromStatus, type TuyaStatus } from "../normalize";
 import { detectAnomalies } from "../logic/anomaly";
 import { storage } from "../storage";
+import { evaluateAlertsForDevice } from "../alerts";
 
 const prisma = new PrismaClient();
 
@@ -158,6 +159,9 @@ async function healthTick() {
           pfEst: finalValues.pfEst,
           online: device.online
         }, now);
+
+        // Evaluate alert rules for this device
+        await evaluateAlertsForDevice(device.id);
       }
     }
     
