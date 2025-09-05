@@ -193,12 +193,18 @@ export default function HomePage() {
             <Card key={device.deviceId} className="shadow-sm hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base truncate" data-testid={`device-name-${device.deviceId}`}>
-                    {device.name}
-                  </CardTitle>
+                  <div className="min-w-0 flex-1 mr-3">
+                    <CardTitle 
+                      className="text-lg font-bold text-primary bg-primary/5 px-3 py-2 rounded-lg border border-primary/20" 
+                      data-testid={`device-name-${device.deviceId}`}
+                      title={device.name}
+                    >
+                      {device.name}
+                    </CardTitle>
+                  </div>
                   <Badge 
                     variant="default"
-                    className="bg-green-100 text-green-800 hover:bg-green-200"
+                    className="bg-green-100 text-green-800 hover:bg-green-200 flex-shrink-0"
                   >
                     <div className="w-2 h-2 rounded-full bg-green-500 mr-1" />
                     Online
