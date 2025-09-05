@@ -4,8 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
-import { ArrowLeft, Activity, Zap, Calendar, BarChart3 } from "lucide-react";
-import { Link } from "wouter";
+import { Activity, Zap, Calendar, BarChart3 } from "lucide-react";
+import { PageLayout } from "@/components/page-layout";
 import DeviceSelector from "@/components/DeviceSelector";
 
 interface SeriesDataPoint {
@@ -80,32 +80,12 @@ export default function ChartsPage() {
   }, []) || [];
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  Back
-                </Button>
-              </Link>
-              <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
-                <BarChart3 className="text-primary-foreground h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">Energy Charts</h1>
-                <p className="text-sm text-muted-foreground">Device power consumption and energy usage</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageLayout 
+      title="Energy Charts" 
+      subtitle="Device power consumption and energy usage"
+      showConnectionStatus={false}
+    >
+      <div className="space-y-6">
         {/* Device Selection */}
         <div className="mb-6">
           <Card>
@@ -222,7 +202,7 @@ export default function ChartsPage() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

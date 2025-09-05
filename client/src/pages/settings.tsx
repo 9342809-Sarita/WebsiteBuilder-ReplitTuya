@@ -16,10 +16,9 @@ import {
   FileText, 
   Smartphone, 
   AlertCircle,
-  RefreshCw,
-  ArrowLeft 
+  RefreshCw
 } from "lucide-react";
-import { Link } from "wouter";
+import { PageLayout } from "@/components/page-layout";
 
 interface DeviceSpec {
   id: number;
@@ -177,31 +176,12 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <Link href="/">
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4 mr-1" />
-                  Back
-                </Button>
-              </Link>
-              <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
-                <Settings className="text-primary-foreground h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-semibold text-foreground">Device Settings</h1>
-                <p className="text-sm text-muted-foreground">Manage device specifications and configurations</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <PageLayout 
+      title="Device Settings" 
+      subtitle="Manage device specifications and configurations"
+      showConnectionStatus={false}
+    >
+      <div className="space-y-6">
         {/* Load Devices Button */}
         {devices.length === 0 && !isLoadingDevices && (
           <div className="mb-6">
@@ -371,7 +351,7 @@ export default function SettingsPage() {
             <p className="text-sm">Load your devices first to start managing their specifications</p>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

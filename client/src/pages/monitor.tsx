@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Database, Activity, ChevronDown, ChevronUp, HardDrive, Settings } from "lucide-react";
-import { Link } from "wouter";
+import { Database, Activity, ChevronDown, ChevronUp, HardDrive, Settings } from "lucide-react";
+import { PageLayout } from "@/components/page-layout";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -149,48 +149,42 @@ export default function MonitorPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-cyan-50 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900">
-      {/* Header */}
-      <header className="border-b border-white/20 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <Link href="/">
-                <button className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white transition-colors">
-                  <ArrowLeft className="h-5 w-5" />
-                  <span>Back to Home</span>
-                </button>
-              </Link>
-              <div className="h-6 border-l border-gray-300 dark:border-gray-600" />
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center space-x-2">
-                <Database className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                <span>Data Monitor</span>
-              </h1>
+    <PageLayout 
+      title="Data Monitor" 
+      subtitle="Real-time database activity and storage tracking"
+      showConnectionStatus={false}
+    >
+      <div className="space-y-6">
+        {/* Header Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">Database Monitor</h2>
+            <p className="text-sm text-muted-foreground mt-1">Track ingestion, storage, and performance metrics</p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className="hidden sm:block text-sm text-muted-foreground">
+              {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-sm text-gray-500 dark:text-gray-400">
-                {lastUpdate && `Last update: ${lastUpdate.toLocaleTimeString()}`}
-              </div>
-              <div className="flex items-center space-x-2">
-                {isRefreshing ? (
-                  <div className="flex items-center space-x-2 text-blue-600 dark:text-blue-400">
-                    <Activity className="h-4 w-4 animate-pulse" />
-                    <span className="text-sm font-medium">Refreshing...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-200 dark:border-blue-700">
-                    <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                      Refresh in: <span className="font-mono font-bold">{countdown}s</span>
-                    </span>
-                  </div>
-                )}
-                <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
+            <div className="flex items-center space-x-2">
+              {isRefreshing ? (
+                <div className="flex items-center space-x-1 sm:space-x-2 text-blue-600 dark:text-blue-400">
+                  <Activity className="h-4 w-4 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-medium hidden sm:inline">Refreshing...</span>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-1 sm:space-x-2 bg-blue-50 dark:bg-blue-900/20 px-2 sm:px-3 py-1 rounded-full border border-blue-200 dark:border-blue-700">
+                  <Activity className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-xs sm:text-sm font-medium text-blue-700 dark:text-blue-300">
+                    <span className="hidden sm:inline">Refresh in: </span><span className="font-mono font-bold">{countdown}s</span>
+                  </span>
+                </div>
+              )}
+              <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 w-8 p-0" data-testid="settings-dialog-trigger">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Monitor Settings</DialogTitle>
@@ -226,14 +220,9 @@ export default function MonitorPage() {
                     </div>
                   </DialogContent>
                 </Dialog>
-              </div>
             </div>
           </div>
         </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {err && (
           <Card className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
             <CardContent className="pt-4">
@@ -464,7 +453,7 @@ export default function MonitorPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

@@ -43,7 +43,7 @@ export default function HomePage() {
     refetch: refetchDevices 
   } = useQuery({
     queryKey: ["/api/devices"],
-    enabled: false, // Don't auto-fetch, wait for user action
+    enabled: true, // Auto-fetch devices on load/refresh
   });
 
   const devices: TuyaDevice[] = (devicesData as any)?.result?.devices || (devicesData as any)?.result?.list || (devicesData as any)?.result || [];
@@ -151,7 +151,7 @@ export default function HomePage() {
                 <Home className="text-primary-foreground h-5 w-5" />
               </div>
               <div>
-                <h1 className="text-xl font-semibold text-foreground">Tuya Device Monitor</h1>
+                <h1 className="text-xl font-semibold text-foreground">Enerlytics</h1>
                 <p className="text-sm text-muted-foreground">Read-only Smart Life device viewer</p>
               </div>
             </div>

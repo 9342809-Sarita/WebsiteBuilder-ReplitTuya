@@ -14,7 +14,7 @@ interface PageLayoutProps {
 
 export function PageLayout({ 
   children, 
-  title = "Tuya Device Monitor", 
+  title = "Enerlytics", 
   subtitle = "Smart Life device monitoring system",
   showConnectionStatus = true,
   className = ""
