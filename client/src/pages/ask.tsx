@@ -167,24 +167,19 @@ export default function AskPage() {
 
             {/* Answer Display */}
             {answer && (
-              <Card className="bg-muted/50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-lg flex items-center space-x-2">
-                    <Brain className="h-4 w-4" />
-                    <span>AI Response</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose prose-sm max-w-none dark:prose-invert">
-                    <pre 
-                      className="whitespace-pre-wrap font-sans text-sm text-foreground leading-relaxed"
-                      data-testid="ai-answer"
-                    >
-                      {answer}
-                    </pre>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="space-y-2">
+                <label className="text-sm font-medium flex items-center space-x-2">
+                  <Brain className="h-4 w-4" />
+                  <span>AI Response</span>
+                </label>
+                <Textarea
+                  value={answer}
+                  readOnly
+                  rows={8}
+                  data-testid="ai-answer"
+                  className="resize-none"
+                />
+              </div>
             )}
 
             {/* Usage Examples */}
