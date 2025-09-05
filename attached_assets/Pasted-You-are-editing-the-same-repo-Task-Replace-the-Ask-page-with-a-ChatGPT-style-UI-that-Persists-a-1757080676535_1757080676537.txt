@@ -1,3 +1,17 @@
+You are editing the same repo.
+
+Task: Replace the Ask page with a ChatGPT-style UI that:
+
+Persists a sessionId in localStorage
+
+Shows a scrollable transcript
+
+Sends/receives via /api/ask POST
+
+Can clear the chat with /api/ask/reset
+
+Replace entire file client/src/pages/ask.tsx with:
+
 // client/src/pages/ask.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -146,3 +160,7 @@ export default function AskPage() {
     </div>
   );
 }
+
+
+Do not change other files.
+Return only: “Ask page replaced.”
