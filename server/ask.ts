@@ -3,17 +3,62 @@ import type { Request, Response } from "express";
 import { askLLMWithHistory, samplePoints } from "./ai";
 import { getHistory, appendMessage, resetSession } from "./chat-store";
 
-// Build a compact context object; wire in your existing stats calls if needed
+// Build a comprehensive context object with device data, specs, and status
 async function buildContext(req: Request) {
-  // For now, return a minimal context since we removed the complex data fetching
-  const context = {
-    timeRange: { start: "", end: "" },
-    granularity: "day",
-    devicesQueried: [],
-    timestamp: new Date().toISOString(),
-  };
-
-  return context;
+  try {
+    const baseUrl = `http://${req.headers.host || 'localhost:5000'}`;
+    
+    // Fetch devices list with embedded status
+    const devicesResponse = await fetch(`${baseUrl}/api/devices`);
+    const devicesData = await devicesResponse.json();
+    const devices = devicesData?.result?.devices || [];
+    
+    // Fetch device specifications
+    const specsResponse = await fetch(`${baseUrl}/api/device-specs`);
+    const specsData = await specsResponse.json();
+    const specifications = specsData?.result || [];
+    
+    // Create a comprehensive context
+    const context = {
+      timestamp: new Date().toISOString(),
+      deviceCount: devices.length,
+      devices: devices.map((device: any) => ({
+        id: device.id || device.device_id,
+        name: device.name,
+        category: device.category,
+        categoryName: device.category_name,
+        productName: device.product_name,
+        online: device.online,
+        status: device.status || [],
+        activeTime: device.active_time,
+        updateTime: device.update_time
+      })),
+      deviceSpecifications: specifications.map((spec: any) => ({
+        deviceId: spec.deviceId,
+        deviceName: spec.deviceName,
+        specification: spec.specification,
+        createdAt: spec.createdAt
+      })),
+      summary: {
+        onlineDevices: devices.filter((d: any) => d.online).length,
+        offlineDevices: devices.filter((d: any) => !d.online).length,
+        totalSpecs: specifications.length,
+        categories: [...new Set(devices.map((d: any) => d.category_name).filter(Boolean))]
+      }
+    };
+    
+    return context;
+  } catch (error) {
+    console.error('buildContext error:', error);
+    // Return minimal context on error
+    return {
+      timestamp: new Date().toISOString(),
+      error: 'Failed to fetch context data',
+      deviceCount: 0,
+      devices: [],
+      deviceSpecifications: []
+    };
+  }
 }
 
 /**
