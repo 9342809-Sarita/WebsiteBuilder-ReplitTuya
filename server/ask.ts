@@ -84,12 +84,41 @@ export async function handleAsk(req: Request, res: Response) {
     const history = getHistory(sessionId);
     const answer = await askLLMWithHistory({ history, userContent });
 
+    // Parse potential tool calls
+    let parsed: any; try { parsed = JSON.parse(answer); } catch {}
+    let finalText = parsed?.answer || answer;
+
+    if (parsed?.tool?.name === "create_alert") {
+      const a = parsed.tool.args || {};
+      // map deviceName → id
+      const devs = context.devices || [];
+      const match = devs.find((d:any) => d.name?.toLowerCase() === String(a.deviceName||"").toLowerCase());
+      if (match?.id) {
+        const baseUrl = `http://${req.headers.host || 'localhost:5000'}`;
+        const res = await fetch(`${baseUrl}/api/alerts/rules`, {
+          method: "POST", headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({
+            name: a.name || `Alert: ${a.metric} ${a.op} ${a.threshold}`,
+            deviceId: match.id,
+            metric: a.metric, op: a.op, threshold: a.threshold, durationS: a.durationS
+          })
+        }).then(r=>r.json());
+        if (res.ok) {
+          finalText += `\n\n✅ Created alert rule "${res.rule.name}" for ${match.name}.`;
+        } else {
+          finalText += `\n\n⚠️ Failed to create alert: ${res.error || "unknown error"}.`;
+        }
+      } else {
+        finalText += `\n\n⚠️ I couldn't find a device named "${a.deviceName}".`;
+      }
+    }
+
     appendMessage(sessionId, { role: "user", content: q, ts: Date.now() });
-    appendMessage(sessionId, { role: "assistant", content: answer, ts: Date.now() });
+    appendMessage(sessionId, { role: "assistant", content: finalText, ts: Date.now() });
 
     res.json({
       ok: true,
-      answer,
+      answer: finalText,
       sessionId,
       history: getHistory(sessionId),
     });
