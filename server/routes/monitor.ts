@@ -235,4 +235,72 @@ r.get("/monitor/selftest", async (_req, res) => {
   }
 });
 
+/**
+ * GET /api/monitor/storage-size
+ * Returns database storage size in bytes for live counter display
+ */
+r.get("/monitor/storage-size", async (_req, res) => {
+  try {
+    const db = dbFlavor();
+    
+    if (db === "postgres") {
+      // Get total database size and individual table sizes
+      const sizeQuery = `
+        SELECT 
+          pg_database_size(current_database()) as total_size,
+          (SELECT pg_total_relation_size('Device')) as device_size,
+          (SELECT pg_total_relation_size('RawHealth')) as rawhealth_size,
+          (SELECT pg_total_relation_size('RawEnergy')) as rawenergy_size,
+          (SELECT pg_total_relation_size('DailyKwh')) as dailykwh_size,
+          (SELECT pg_total_relation_size('Rollup1m')) as rollup1m_size,
+          (SELECT pg_total_relation_size('Rollup15m')) as rollup15m_size,
+          (SELECT pg_total_relation_size('Rollup1h')) as rollup1h_size,
+          (SELECT pg_total_relation_size('Event')) as event_size
+      `;
+      
+      const result = await prisma.$queryRawUnsafe(sizeQuery) as any[];
+      const row = result[0] || {};
+      
+      res.json({
+        ok: true,
+        totalSizeBytes: parseInt(row.total_size || "0"),
+        tables: {
+          Device: parseInt(row.device_size || "0"),
+          RawHealth: parseInt(row.rawhealth_size || "0"),
+          RawEnergy: parseInt(row.rawenergy_size || "0"),
+          DailyKwh: parseInt(row.dailykwh_size || "0"),
+          Rollup1m: parseInt(row.rollup1m_size || "0"),
+          Rollup15m: parseInt(row.rollup15m_size || "0"),
+          Rollup1h: parseInt(row.rollup1h_size || "0"),
+          Event: parseInt(row.event_size || "0"),
+        }
+      });
+    } else if (db === "sqlite") {
+      // For SQLite, use PRAGMA to get database size
+      const result = await prisma.$queryRaw`PRAGMA page_count;` as any[];
+      const pageCount = result[0]?.page_count || 0;
+      const pageSize = 4096; // SQLite default page size
+      const totalSize = pageCount * pageSize;
+      
+      res.json({
+        ok: true,
+        totalSizeBytes: totalSize,
+        tables: {
+          note: "Individual table sizes not available for SQLite"
+        }
+      });
+    } else {
+      res.json({
+        ok: false,
+        error: `Storage size not supported for database type: ${db}`
+      });
+    }
+  } catch (e: any) {
+    res.json({
+      ok: false,
+      error: e?.message || String(e)
+    });
+  }
+});
+
 export default r;

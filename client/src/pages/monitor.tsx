@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Database, Activity, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Database, Activity, ChevronDown, ChevronUp, HardDrive } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -38,11 +38,28 @@ type TailRow = {
   addEleKwh?: number | null;
 };
 
+type StorageSize = {
+  ok: boolean;
+  totalSizeBytes: number;
+  tables?: Record<string, number>;
+  error?: string;
+};
+
+// Utility to format bytes as KB/MB/GB
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(((bytes / Math.pow(k, i)) + Number.EPSILON) * 100) / 100 + " " + sizes[i];
+}
+
 export default function MonitorPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [tail, setTail] = useState<TailRow[]>([]);
   const [schema, setSchema] = useState<any>(null);
   const [selftest, setSelftest] = useState<any>(null);
+  const [storageSize, setStorageSize] = useState<StorageSize | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -54,22 +71,25 @@ export default function MonitorPage() {
     const tick = async () => {
       try {
         setErr(null);
-        const [sRes, tRes, schRes, stRes] = await Promise.all([
+        const [sRes, tRes, schRes, stRes, szRes] = await Promise.all([
           fetch("/api/monitor/ingest-summary"),
           fetch("/api/monitor/latest?limit=50"),
           fetch("/api/monitor/schema"),
           fetch("/api/monitor/selftest"),
+          fetch("/api/monitor/storage-size"),
         ]);
         
         const s = await sRes.json();
         const t = await tRes.json();
         const sch = await schRes.json();
         const st = await stRes.json();
+        const sz = await szRes.json();
         
         setSummary(s);
         setTail(t.rows ?? []);
         setSchema(sch);
         setSelftest(st);
+        setStorageSize(sz);
         setLastUpdate(new Date());
       } catch (e: any) {
         setErr(e?.message || String(e));
@@ -135,7 +155,7 @@ export default function MonitorPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/50 dark:to-blue-800/50 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
                   <div className="text-sm font-medium text-blue-700 dark:text-blue-300">RawHealth Rows</div>
                   <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
