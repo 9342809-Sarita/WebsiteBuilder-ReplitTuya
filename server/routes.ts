@@ -7,6 +7,7 @@ import { tuya, baseUrl } from "./tuya";
 import energyRouter from "./routes/energy";
 import devicesUiRouter from "./routes/devices-ui";
 import monitorRouter from "./routes/monitor";
+import alertsRouter from "./routes/alerts";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -18,6 +19,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount monitor API routes
   app.use("/api", monitorRouter);
+  
+  // Mount alerts API routes
+  app.use("/api", alertsRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
