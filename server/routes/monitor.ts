@@ -62,7 +62,7 @@ r.get("/monitor/ingest-summary", async (_req, res) => {
   try {
     const devs = await prisma.device.findMany({
       orderBy: { deviceId: "asc" },
-      select: { deviceId: true, name: true },
+      select: { deviceId: true, name: true, lastOnlineUtc: true, lastSeenUtc: true },
     });
 
     for (const d of devs) {
@@ -87,15 +87,21 @@ r.get("/monitor/ingest-summary", async (_req, res) => {
         errE = e?.message || String(e);
       }
 
+      // Calculate if device is online (same logic as in energy.ts)
+      const isOnline = d.lastOnlineUtc && d.lastSeenUtc 
+        ? d.lastOnlineUtc.getTime() >= d.lastSeenUtc.getTime() - 60000 // Within 1 minute
+        : false;
+
       result.devices.push({
         deviceId: d.deviceId,
         name: d.name ?? d.deviceId,
         lastHealthTs: lastH?.tsUtc ?? null,
         lastEnergyTs: lastE?.tsUtc ?? null,
-        lastPowerW: lastH?.powerW ?? null,
-        lastVoltageV: lastH?.voltageV ?? null,
-        lastCurrentA: lastH?.currentA ?? null,
-        lastAddEleKwh: lastE?.addEleKwh ?? null,
+        // If device is offline, show 0 values for all electrical readings
+        lastPowerW: isOnline ? (lastH?.powerW ?? null) : 0,
+        lastVoltageV: isOnline ? (lastH?.voltageV ?? null) : 0,
+        lastCurrentA: isOnline ? (lastH?.currentA ?? null) : 0,
+        lastAddEleKwh: isOnline ? (lastE?.addEleKwh ?? null) : 0,
         _errors: { lastHealth: errH, lastEnergy: errE },
       });
     }
