@@ -152,7 +152,6 @@ export default function HomePage() {
               </div>
               <div>
                 <h1 className="text-xl font-semibold text-foreground">Enerlytics</h1>
-                <p className="text-sm text-muted-foreground">Read-only Smart Life device viewer</p>
               </div>
             </div>
             <ResponsiveNavigation 
@@ -166,6 +165,13 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Page Description */}
+        <div className="mb-4 sm:mb-6">
+          <p className="text-sm text-muted-foreground">
+            Read-only Smart Life device viewer
+          </p>
+        </div>
+        
         {/* Controls */}
         <div className="mb-6 sm:mb-8">
           <Card className="shadow-sm">
