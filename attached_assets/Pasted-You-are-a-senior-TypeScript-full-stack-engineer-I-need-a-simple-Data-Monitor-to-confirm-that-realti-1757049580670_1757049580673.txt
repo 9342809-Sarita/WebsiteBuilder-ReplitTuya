@@ -1,0 +1,358 @@
+You are a senior TypeScript full-stack engineer. I need a simple Data Monitor to confirm that realtime Tuya data is being ingested and stored. Add a tiny backend monitor API and a minimal frontend page that shows:
+
+Per-device: last Health sample time, last Energy sample time, and last values (power/voltage/current/add_ele).
+
+Global counters: total rows in RawHealth and RawEnergy, plus rows inserted in the last 10 minutes.
+
+A live tail (latest 50 rows) so I can see new inserts appear when the pollers run.
+
+Auto-refresh every 5 seconds.
+
+Keep changes minimal and well-commented. After finishing, print:
+
+FEATURE DONE: data-monitor
+Changed files:
+- server/routes/monitor.ts
+- server/routes/index.ts (or wherever you mount routes)
+- client/pages/Monitor.tsx
+- client/router or nav (link to Monitor page)
+
+1) Backend: monitor routes
+
+Create server/routes/monitor.ts:
+
+import { Router } from "express";
+import { PrismaClient } from "@prisma/client";
+
+const r = Router();
+const prisma = new PrismaClient();
+
+/**
+ * GET /api/monitor/ingest-summary
+ * Returns global counts and per-device last-seen snapshots for health/energy.
+ */
+r.get("/monitor/ingest-summary", async (_req, res) => {
+  try {
+    // Global counts
+    const [healthCount, energyCount] = await Promise.all([
+      prisma.rawHealth.count(),
+      prisma.rawEnergy.count(),
+    ]);
+
+    // Counts in last 10 minutes (ingest rate rough check)
+    const since10 = new Date(Date.now() - 10 * 60 * 1000);
+    const [health10, energy10] = await Promise.all([
+      prisma.rawHealth.count({ where: { tsUtc: { gte: since10 } } }),
+      prisma.rawEnergy.count({ where: { tsUtc: { gte: since10 } } }),
+    ]);
+
+    // Device list from DB
+    const devices = await prisma.device.findMany({
+      orderBy: { deviceId: "asc" },
+      select: { deviceId: true, name: true },
+    });
+
+    // For each device, find last health & energy rows
+    const perDevice = [];
+    for (const d of devices) {
+      const [lastH, lastE] = await Promise.all([
+        prisma.rawHealth.findFirst({
+          where: { deviceId: d.deviceId },
+          orderBy: { tsUtc: "desc" },
+        }),
+        prisma.rawEnergy.findFirst({
+          where: { deviceId: d.deviceId },
+          orderBy: { tsUtc: "desc" },
+        }),
+      ]);
+
+      perDevice.push({
+        deviceId: d.deviceId,
+        name: d.name ?? d.deviceId,
+        lastHealthTs: lastH?.tsUtc ?? null,
+        lastEnergyTs: lastE?.tsUtc ?? null,
+        lastPowerW: lastH?.powerW ?? null,
+        lastVoltageV: lastH?.voltageV ?? null,
+        lastCurrentA: lastH?.currentA ?? null,
+        lastAddEleKwh: lastE?.addEleKwh ?? null,
+      });
+    }
+
+    res.json({
+      ok: true,
+      global: {
+        rawHealthCount: healthCount,
+        rawEnergyCount: energyCount,
+        rawHealthLast10m: health10,
+        rawEnergyLast10m: energy10,
+        nowUtc: new Date().toISOString(),
+      },
+      devices: perDevice,
+    });
+  } catch (e: any) {
+    console.error("[/api/monitor/ingest-summary] error:", e);
+    res.status(500).json({ ok: false, error: "Failed to build summary" });
+  }
+});
+
+/**
+ * GET /api/monitor/latest?limit=50
+ * Returns a merged "tail" of latest rows from RawHealth & RawEnergy.
+ */
+r.get("/monitor/latest", async (req, res) => {
+  try {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit ?? 50)));
+
+    const [h, e] = await Promise.all([
+      prisma.rawHealth.findMany({
+        orderBy: { tsUtc: "desc" },
+        take: limit,
+        select: {
+          tsUtc: true, deviceId: true,
+          powerW: true, voltageV: true, currentA: true, pfEst: true,
+        },
+      }),
+      prisma.rawEnergy.findMany({
+        orderBy: { tsUtc: "desc" },
+        take: limit,
+        select: {
+          tsUtc: true, deviceId: true,
+          addEleKwh: true,
+        },
+      }),
+    ]);
+
+    // Tag rows and merge then sort by time desc
+    const rows = [
+      ...h.map(r => ({ table: "RawHealth", ...r })),
+      ...e.map(r => ({ table: "RawEnergy", ...r })),
+    ].sort((a, b) => +new Date(b.tsUtc) - +new Date(a.tsUtc))
+     .slice(0, limit);
+
+    res.json({ ok: true, rows });
+  } catch (e: any) {
+    console.error("[/api/monitor/latest] error:", e);
+    res.status(500).json({ ok: false, error: "Failed to load latest" });
+  }
+});
+
+export default r;
+
+
+Mount it in your routes registration (e.g., server/routes/index.ts):
+
+import monitorRouter from "./monitor";
+app.use("/api", monitorRouter);
+
+
+Acceptance (backend)
+
+Open /api/monitor/ingest-summary → see global counts and devices array with timestamps/last values.
+
+Open /api/monitor/latest?limit=50 → see mixed tail rows with table = RawHealth/RawEnergy.
+
+2) Frontend: Monitor page
+
+Create client/pages/Monitor.tsx (adjust paths to your project):
+
+import React, { useEffect, useState } from "react";
+
+type Summary = {
+  ok: boolean;
+  global: {
+    rawHealthCount: number;
+    rawEnergyCount: number;
+    rawHealthLast10m: number;
+    rawEnergyLast10m: number;
+    nowUtc: string;
+  };
+  devices: Array<{
+    deviceId: string;
+    name: string;
+    lastHealthTs: string | null;
+    lastEnergyTs: string | null;
+    lastPowerW: number | null;
+    lastVoltageV: number | null;
+    lastCurrentA: number | null;
+    lastAddEleKwh: number | null;
+  }>;
+};
+
+type TailRow = {
+  table: "RawHealth" | "RawEnergy";
+  tsUtc: string;
+  deviceId: string;
+  powerW?: number | null;
+  voltageV?: number | null;
+  currentA?: number | null;
+  pfEst?: number | null;
+  addEleKwh?: number | null;
+};
+
+export default function MonitorPage() {
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [tail, setTail] = useState<TailRow[]>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Auto-refresh every 5s
+  useEffect(() => {
+    let timer: any;
+
+    const tick = async () => {
+      try {
+        setErr(null);
+        const [sRes, tRes] = await Promise.all([
+          fetch("/api/monitor/ingest-summary"),
+          fetch("/api/monitor/latest?limit=50"),
+        ]);
+        if (!sRes.ok) throw new Error(`/ingest-summary HTTP ${sRes.status}`);
+        if (!tRes.ok) throw new Error(`/latest HTTP ${tRes.status}`);
+        const s = await sRes.json();
+        const t = await tRes.json();
+        setSummary(s);
+        setTail(t.rows ?? []);
+      } catch (e: any) {
+        setErr(e?.message || String(e));
+      } finally {
+        timer = setTimeout(tick, 5000);
+      }
+    };
+
+    tick();
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="p-4">
+      <h1 className="text-xl font-semibold mb-3">Data Monitor</h1>
+
+      {err && <div className="text-red-600 mb-3">Error: {err}</div>}
+
+      {/* Global block */}
+      {summary && (
+        <div className="border rounded p-3 mb-4">
+          <div className="font-medium mb-2">Global</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="border rounded p-2">
+              <div className="text-gray-500">RawHealth rows</div>
+              <div className="text-lg">{summary.global.rawHealthCount}</div>
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">RawEnergy rows</div>
+              <div className="text-lg">{summary.global.rawEnergyCount}</div>
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">Last 10 min Health</div>
+              <div className="text-lg">{summary.global.rawHealthLast10m}</div>
+            </div>
+            <div className="border rounded p-2">
+              <div className="text-gray-500">Last 10 min Energy</div>
+              <div className="text-lg">{summary.global.rawEnergyLast10m}</div>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">Now (UTC): {summary.global.nowUtc}</div>
+        </div>
+      )}
+
+      {/* Per-device last seen */}
+      {summary && (
+        <div className="border rounded p-3 mb-4">
+          <div className="font-medium mb-2">Per Device — Last Seen</div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">Device</th>
+                  <th className="py-2 pr-4">Last Health (UTC)</th>
+                  <th className="py-2 pr-4">Last Energy (UTC)</th>
+                  <th className="py-2 pr-4">Power W</th>
+                  <th className="py-2 pr-4">Voltage V</th>
+                  <th className="py-2 pr-4">Current A</th>
+                  <th className="py-2 pr-4">add_ele kWh</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.devices.map(d => (
+                  <tr key={d.deviceId} className="border-b">
+                    <td className="py-2 pr-4">
+                      <div className="font-medium">{d.name}</div>
+                      <div className="text-gray-500">{d.deviceId}</div>
+                    </td>
+                    <td className="py-2 pr-4">{d.lastHealthTs ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastEnergyTs ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastPowerW ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastVoltageV ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastCurrentA ?? "-"}</td>
+                    <td className="py-2 pr-4">{d.lastAddEleKwh ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Live tail */}
+      <div className="border rounded p-3">
+        <div className="font-medium mb-2">Live Tail (latest 50 rows)</div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="text-left border-b">
+                <th className="py-2 pr-4">When (UTC)</th>
+                <th className="py-2 pr-4">Table</th>
+                <th className="py-2 pr-4">Device</th>
+                <th className="py-2 pr-4">Power W</th>
+                <th className="py-2 pr-4">Voltage V</th>
+                <th className="py-2 pr-4">Current A</th>
+                <th className="py-2 pr-4">PF</th>
+                <th className="py-2 pr-4">add_ele kWh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tail.map((row, i) => (
+                <tr key={i} className="border-b">
+                  <td className="py-2 pr-4">{row.tsUtc}</td>
+                  <td className="py-2 pr-4">{row.table}</td>
+                  <td className="py-2 pr-4">{row.deviceId}</td>
+                  <td className="py-2 pr-4">{row.powerW ?? "-"}</td>
+                  <td className="py-2 pr-4">{row.voltageV ?? "-"}</td>
+                  <td className="py-2 pr-4">{row.currentA ?? "-"}</td>
+                  <td className="py-2 pr-4">{row.pfEst ?? "-"}</td>
+                  <td className="py-2 pr-4">{row.addEleKwh ?? "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="text-xs text-gray-500 mt-2">Auto-refresh every 5s.</div>
+      </div>
+    </div>
+  );
+}
+
+
+Add a link to this page in your nav/router (e.g., “Monitor”). Ensure the route is reachable (e.g., /monitor).
+
+Acceptance (frontend)
+
+Open /monitor.
+
+See global counts and a per-device table with last timestamps and last values.
+
+The Live Tail table fills with newest inserts; leave the page open and confirm new rows appear every time your pollers run.
+
+3) (Optional) Prisma Studio quick check
+
+In Replit shell:
+
+npx prisma studio
+
+
+Open the Studio URL → browse RawHealth and RawEnergy to visually confirm inserts.
+
+If you hit empty results
+
+Check that Tuya credentials are set (TUYA_ACCESS_ID, TUYA_ACCESS_SECRET) and that your pollers are running (look for the “pollers started” log).
+
+Hit /api/devices or your existing Tuya endpoints to confirm the Smart Life account has devices online.

@@ -7,6 +7,7 @@ import HomePage from "@/pages/home";
 import SettingsPage from "@/pages/settings";
 import AskPage from "@/pages/ask";
 import ChartsPage from "@/pages/charts";
+import MonitorPage from "@/pages/monitor";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/settings" component={SettingsPage} />
       <Route path="/ask" component={AskPage} />
       <Route path="/charts" component={ChartsPage} />
+      <Route path="/monitor" component={MonitorPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -165,6 +165,12 @@ export default function HomePage() {
                   Charts
                 </Button>
               </Link>
+              <Link href="/monitor">
+                <Button variant="outline" size="sm" data-testid="link-monitor">
+                  <Monitor className="mr-2 h-4 w-4" />
+                  Monitor
+                </Button>
+              </Link>
               <Link href="/ask">
                 <Button variant="outline" size="sm" data-testid="link-ask">
                   <MessageSquare className="mr-2 h-4 w-4" />
