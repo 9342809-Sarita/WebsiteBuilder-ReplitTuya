@@ -1,23 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { TuyaContext } from "@tuya/tuya-connector-nodejs";
 import { storage } from "./storage";
 import { insertDeviceSpecSchema } from "@shared/schema";
 import { handleAsk } from "./ask";
-
-const baseUrl = process.env.TUYA_ENDPOINT || process.env.TUYA_ENDPOINT_ENV_VAR || "https://openapi.tuyain.com";
-const accessKey = process.env.TUYA_ACCESS_ID || process.env.TUYA_ACCESS_ID_ENV_VAR || "default_access_id";
-const secretKey = process.env.TUYA_ACCESS_SECRET || process.env.TUYA_ACCESS_SECRET_ENV_VAR || "default_secret";
-
-if (!baseUrl || !accessKey || !secretKey || accessKey === "default_access_id" || secretKey === "default_secret") {
-  console.warn("[WARN] Missing Tuya ENV: TUYA_ENDPOINT, TUYA_ACCESS_ID, TUYA_ACCESS_SECRET");
-}
-
-const tuya = new TuyaContext({
-  baseUrl,
-  accessKey,
-  secretKey
-});
+import { tuya, baseUrl } from "./tuya";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
