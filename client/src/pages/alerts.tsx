@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 function useBeep() {
   // WebAudio beep to avoid asset files
@@ -26,6 +27,8 @@ export default function AlertsPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [events, setEvents] = useState<any[]>([]);
   const [form, setForm] = useState<any>({ name: "", deviceId: "", metric: "powerW", op: ">", threshold: 1000, durationS: 0 });
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [currentEvent, setCurrentEvent] = useState<any | null>(null);
   const beep = useBeep();
 
   const load = async () => {
@@ -44,6 +47,8 @@ export default function AlertsPage() {
         setEvents(prev => [data.event, ...prev].slice(0, 200));
         // play audio
         beep();
+        setCurrentEvent(data.event);
+        setPopupOpen(true);
         // optional: Notification API
         if (Notification && Notification.permission === "granted") {
           new Notification("Power alert", { body: data.event?.message });
@@ -132,6 +137,23 @@ export default function AlertsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={popupOpen} onOpenChange={setPopupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alert triggered</DialogTitle>
+            <DialogDescription>
+              {currentEvent
+                ? `${new Date(currentEvent.tsUtc).toLocaleString()} — ${currentEvent.message || `${currentEvent.deviceId} value ${currentEvent.value}`}`
+                : "An alert just fired."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setPopupOpen(false)}>Dismiss</Button>
+            <Button onClick={() => { setPopupOpen(false); location.assign("/alerts"); }}>Open Alerts</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageLayout>
   );
 }
