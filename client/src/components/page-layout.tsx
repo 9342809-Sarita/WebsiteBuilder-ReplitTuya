@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ResponsiveNavigation } from "@/components/responsive-navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Home, AlertCircle } from "lucide-react";
+import { Link } from "wouter";
 
 interface PageLayoutProps {
   children: ReactNode;
@@ -34,11 +35,24 @@ export function PageLayout({
       <header className="bg-card border-b border-border shadow-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
+            {/* Mobile: Hamburger Menu */}
+            <div className="md:hidden">
+              <ResponsiveNavigation 
+                connectionStatus={showConnectionStatus && isConnected !== undefined ? {
+                  isConnected,
+                  label: isConnected ? "Connected" : "Disconnected"
+                } : undefined}
+                showOnlyHamburger={true}
+              />
+            </div>
+            
             {/* Logo and Title */}
             <div className="flex items-center space-x-3 min-w-0 flex-shrink-0">
-              <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
-                <Home className="text-primary-foreground h-5 w-5" />
-              </div>
+              <Link href="/">
+                <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg cursor-pointer hover:bg-primary/90 transition-colors">
+                  <Home className="text-primary-foreground h-5 w-5" />
+                </div>
+              </Link>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-semibold text-foreground truncate">
                   {title}
@@ -49,13 +63,24 @@ export function PageLayout({
               </div>
             </div>
 
-            {/* Navigation */}
-            <ResponsiveNavigation 
-              connectionStatus={showConnectionStatus && isConnected !== undefined ? {
-                isConnected,
-                label: isConnected ? "Connected" : "Disconnected"
-              } : undefined}
-            />
+            {/* Desktop Navigation */}
+            <div className="hidden md:block">
+              <ResponsiveNavigation 
+                connectionStatus={showConnectionStatus && isConnected !== undefined ? {
+                  isConnected,
+                  label: isConnected ? "Connected" : "Disconnected"
+                } : undefined}
+                showOnlyHamburger={false}
+              />
+            </div>
+            
+            {/* Mobile: AI CHAT Button */}
+            <div className="md:hidden">
+              <ResponsiveNavigation 
+                connectionStatus={undefined}
+                showOnlyAIChat={true}
+              />
+            </div>
           </div>
         </div>
       </header>

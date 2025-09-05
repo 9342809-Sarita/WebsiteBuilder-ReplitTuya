@@ -283,15 +283,19 @@ export default function SettingsPage() {
                           </div>
                         </div>
                         {existingSpec && (
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => handleDeleteSpecification(deviceId)}
-                            disabled={isDeleting}
-                            data-testid={`button-delete-spec-${deviceId}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex flex-col items-end space-y-1">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteSpecification(deviceId)}
+                              disabled={isDeleting}
+                              data-testid={`button-delete-spec-${deviceId}`}
+                              title="Delete current specification"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <span className="text-xs text-muted-foreground">Delete spec</span>
+                          </div>
                         )}
                       </div>
                     </CardHeader>
@@ -309,7 +313,7 @@ export default function SettingsPage() {
                       
                       <div className="space-y-3">
                         <label className="text-sm font-medium text-foreground">
-                          Device Specification
+                          Add new Device Specification
                         </label>
                         <Textarea
                           placeholder="Describe what type of device this is and any relevant specifications..."
