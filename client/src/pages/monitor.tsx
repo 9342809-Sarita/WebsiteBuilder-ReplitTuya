@@ -453,7 +453,7 @@ export default function MonitorPage() {
                       <td className="py-2 pr-4 font-mono">{row.powerW ?? "-"}</td>
                       <td className="py-2 pr-4 font-mono">{row.voltageV ?? "-"}</td>
                       <td className="py-2 pr-4 font-mono">{row.currentA ?? "-"}</td>
-                      <td className="py-2 pr-4 font-mono">{row.pfEst !== null ? row.pfEst.toFixed(2) : "-"}</td>
+                      <td className="py-2 pr-4 font-mono">{(row.pfEst !== null && row.pfEst !== undefined && typeof row.pfEst === 'number') ? row.pfEst.toFixed(2) : "-"}</td>
                       <td className="py-2 pr-4 font-mono">{row.addEleKwh ?? "-"}</td>
                     </tr>
                   ))}
