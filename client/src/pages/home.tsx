@@ -313,7 +313,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Power Factor</span>
                   </div>
                   <span className="text-lg font-bold text-purple-600" data-testid={`pf-${device.deviceId}`}>
-                    {device.online ? device.pf.toFixed(3) : '0.000'}
+                    {device.online ? device.pf.toFixed(2) : '0.00'}
                   </span>
                 </div>
               </CardContent>
