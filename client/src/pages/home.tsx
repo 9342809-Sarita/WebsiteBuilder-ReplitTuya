@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLayout } from "@/components/page-layout";
+import { PfSourceBadge } from "@/components/pf-source-badge";
 import { 
   Cpu, 
   CheckCircle, 
@@ -311,6 +312,7 @@ export default function HomePage() {
                   <div className="flex items-center space-x-2">
                     <BarChart3 className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium">Power Factor</span>
+                    <PfSourceBadge size="xs" />
                   </div>
                   <span className="text-lg font-bold text-purple-600" data-testid={`pf-${device.deviceId}`}>
                     {device.online ? device.pf.toFixed(2) : '0.00'}

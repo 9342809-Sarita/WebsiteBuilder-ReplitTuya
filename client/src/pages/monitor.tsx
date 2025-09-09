@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Database, Activity, ChevronDown, ChevronUp, HardDrive, Settings } from "lucide-react";
 import { PageLayout } from "@/components/page-layout";
+import { PfSourceBadge } from "@/components/pf-source-badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -431,7 +432,12 @@ export default function MonitorPage() {
                     <th className="py-3 pr-4 font-medium">Power W</th>
                     <th className="py-3 pr-4 font-medium">Voltage V</th>
                     <th className="py-3 pr-4 font-medium">Current A</th>
-                    <th className="py-3 pr-4 font-medium">PF</th>
+                    <th className="py-3 pr-4 font-medium">
+                      <div className="flex items-center space-x-1">
+                        <span>PF</span>
+                        <PfSourceBadge size="xs" />
+                      </div>
+                    </th>
                     <th className="py-3 pr-4 font-medium">add_ele kWh</th>
                   </tr>
                 </thead>
