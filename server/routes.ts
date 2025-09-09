@@ -10,6 +10,7 @@ import devicesUiRouter from "./routes/devices-ui";
 import monitorRouter from "./routes/monitor";
 import alertsRouter from "./routes/alerts";
 import pushRouter from "./routes/push";
+import appSettingsRouter from "./routes/app-settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -30,6 +31,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount push notifications API routes
   app.use("/api", pushRouter);
+  
+  // Mount app settings API routes
+  app.use("/api", appSettingsRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
