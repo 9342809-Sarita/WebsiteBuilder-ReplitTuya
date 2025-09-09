@@ -98,3 +98,14 @@ export async function getPowerLast7d(deviceId: string): Promise<any> {
   const res = await apiRequest("GET", `/api/power/last-7d?deviceId=${deviceId}`);
   return res.json();
 }
+
+// App Settings APIs
+export async function getAppSettings(): Promise<{ ok: boolean; pfSource: "tuya" | "calculated" }> {
+  const res = await apiRequest("GET", "/api/app-settings");
+  return res.json();
+}
+
+export async function setAppSettings(pfSource: "tuya" | "calculated"): Promise<{ ok: boolean }> {
+  const res = await apiRequest("POST", "/api/app-settings", { pfSource });
+  return res.json();
+}
