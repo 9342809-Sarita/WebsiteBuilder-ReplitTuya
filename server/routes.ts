@@ -1,9 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { PrismaClient } from "@prisma/client";
 import { storage } from "./storage";
 import { insertDeviceSpecSchema, insertDeviceSettingsSchema } from "@shared/schema";
 import { handleAsk, getAskHistory, resetAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
+import { resolvePf } from "./pf";
 import energyRouter from "./routes/energy";
 import powerRouter from "./routes/power";
 import devicesUiRouter from "./routes/devices-ui";
@@ -11,6 +13,8 @@ import monitorRouter from "./routes/monitor";
 import alertsRouter from "./routes/alerts";
 import pushRouter from "./routes/push";
 import appSettingsRouter from "./routes/app-settings";
+
+const prisma = new PrismaClient();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -116,7 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const statusData = (statusResp as any)?.result || [];
           
           // Extract electrical readings from status data points
-          let powerW = 0, voltageV = 0, currentA = 0, pf = 0;
+          let powerW = 0, voltageV = 0, currentA = 0, tuyaPf: number | null = null;
           
           statusData.forEach((dp: any) => {
             switch (dp.code) {
@@ -130,10 +134,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 currentA = dp.value ? dp.value / 1000 : 0; // Convert from mA to A
                 break;
               case 'power_factor':
-                pf = dp.value ? dp.value / 1000 : 0; // Convert to decimal
+                tuyaPf = dp.value ? dp.value / 1000 : null; // Convert to decimal
                 break;
             }
           });
+
+          // Calculate estimated PF from power, voltage, and current
+          let pfEst: number | null = null;
+          if (powerW != null && voltageV && currentA) {
+            const denom = voltageV * currentA;
+            if (denom > 0) {
+              pfEst = Math.max(0, Math.min(1, powerW / denom));
+            }
+          }
+
+          // Use global setting to choose PF source
+          const pf = await resolvePf(prisma, tuyaPf, pfEst);
 
           return {
             deviceId: device.deviceId,
@@ -142,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             powerW,
             voltageV,
             currentA,
-            pf
+            pf: pf ?? 0
           };
         } catch (err) {
           // If status fetch fails, still include device but with zeros

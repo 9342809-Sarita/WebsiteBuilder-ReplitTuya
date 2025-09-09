@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { resolvePf } from "../pf";
 
 const r = Router();
 const prisma = new PrismaClient();
@@ -152,9 +153,16 @@ r.get("/monitor/latest", async (req, res) => {
       errors.rawEnergy = err?.message || String(err);
     }
 
-    // Tag rows and merge then sort by time desc
+    // Tag rows and merge then sort by time desc, add unified 'pf' field for health rows
+    const healthRowsWithPf = await Promise.all(
+      h.map(async (r) => {
+        const pf = await resolvePf(prisma, null, Number(r.pfEst) || null);
+        return { table: "RawHealth", ...r, pf: pf ?? 0 };
+      })
+    );
+    
     const rows = [
-      ...h.map(r => ({ table: "RawHealth", ...r })),
+      ...healthRowsWithPf,
       ...e.map(r => ({ table: "RawEnergy", ...r })),
     ].sort((a, b) => +new Date(b.tsUtc) - +new Date(a.tsUtc))
      .slice(0, limit);
