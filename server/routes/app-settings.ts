@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { clearPfCache } from "../pf";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -36,6 +37,9 @@ router.post("/app-settings", async (req, res) => {
       update: { pfSource },
       create: { id: 1, pfSource }
     });
+    
+    // Immediately invalidate PF cache so new setting takes effect
+    clearPfCache();
     
     res.json({ ok: true, pfSource });
   } catch (error) {
