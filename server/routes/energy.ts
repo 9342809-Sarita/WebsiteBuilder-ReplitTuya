@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { PrismaClient } from "@prisma/client";
+import { getIstDayStart, getIstNextDayStart, getIstMonthRange, getIstYearRange, toIsoIst } from "../time";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -326,14 +327,13 @@ router.get("/energy/today-hourly", async (req, res) => {
       });
     }
 
-    // Get today's date in IST timezone
-    const today = new Date();
-    const todayIST = new Date(today.getTime() + (5.5 * 60 * 60 * 1000)); // IST offset
-    const dateStr = todayIST.toISOString().split('T')[0]; // YYYY-MM-DD format
+    // Get today's IST day boundaries using centralized time functions
+    const startOfDay = getIstDayStart();
+    const endOfDay = getIstNextDayStart();
     
-    // Query 1-hour rollups for today
-    const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
-    const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+    // Format date string for response
+    const istStartDate = new Date(startOfDay.getTime() + (5.5 * 60 * 60 * 1000));
+    const dateStr = istStartDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
     const hourlyData = await prisma.rollup1h.findMany({
       where: {
@@ -402,16 +402,13 @@ router.get("/energy/month-daily", async (req, res) => {
       });
     }
 
-    // Default to current month in IST
-    const now = new Date();
-    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    const defaultMonth = istNow.toISOString().substr(0, 7); // YYYY-MM
-    const monthStr = (month as string) || defaultMonth;
-
-    // Parse month and create date range
-    const [year, monthNum] = monthStr.split('-').map(Number);
-    const startOfMonth = new Date(year, monthNum - 1, 1);
-    const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59, 999);
+    // Use centralized time function for month range
+    const monthStr = (month as string);
+    const { start: startOfMonth, end: endOfMonth } = getIstMonthRange(monthStr);
+    
+    // Extract year and month for calculating days in month
+    const currentMonthStr = monthStr || getIstMonthRange().start.toISOString().substr(0, 7);
+    const [year, monthNum] = currentMonthStr.split('-').map(Number);
 
     const dailyData = await prisma.dailyKwh.findMany({
       where: {
@@ -482,14 +479,9 @@ router.get("/energy/year-monthly", async (req, res) => {
       });
     }
 
-    // Default to current year in IST
-    const now = new Date();
-    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    const yearNum = year ? parseInt(year as string) : istNow.getFullYear();
-
-    // Create date range for the year
-    const startOfYear = new Date(yearNum, 0, 1);
-    const endOfYear = new Date(yearNum, 11, 31, 23, 59, 59, 999);
+    // Use centralized time function for year range
+    const yearNum = year ? parseInt(year as string) : undefined;
+    const { start: startOfYear, end: endOfYear } = getIstYearRange(yearNum);
 
     const dailyData = await prisma.dailyKwh.findMany({
       where: {
@@ -524,8 +516,11 @@ router.get("/energy/year-monthly", async (req, res) => {
 
     const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
 
+    // Get the actual year number for response
+    const actualYear = yearNum || new Date(startOfYear.getTime() + (5.5 * 60 * 60 * 1000)).getFullYear();
+    
     res.json({
-      year: yearNum,
+      year: actualYear,
       buckets,
       totalKwh: Number(totalKwh.toFixed(3)),
       ok: true
