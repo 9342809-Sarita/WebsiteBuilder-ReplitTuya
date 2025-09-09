@@ -6,8 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
-import { Activity, Zap, Calendar, BarChart3, Smartphone, Monitor, Home, CheckCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Activity, Zap, Calendar, BarChart3, Smartphone, Monitor, Home, CheckCircle, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { PageLayout } from "@/components/page-layout";
+import { CalendarKwh } from "@/components/CalendarKwh";
 import { 
   getEnergyTodayHourly, 
   getEnergyMonthDaily, 
@@ -117,6 +118,12 @@ export default function ChartsPage() {
     setSelectedMonth(newMonth);
   };
 
+  const resetToToday = () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(currentMonth);
+  };
+
   const formatMonth = (monthStr: string) => {
     const [year, month] = monthStr.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1);
@@ -173,60 +180,6 @@ export default function ChartsPage() {
       day: new Date(point.d).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit' }),
       power: point.wAvg
     }));
-  };
-
-  const processCalendarData = () => {
-    if (!calendarData?.days) return [];
-    
-    type CalendarDay = {
-      day: number;
-      kwh: number;
-      level: number;
-    } | null;
-    
-    const weeks: CalendarDay[][] = [];
-    let currentWeek: CalendarDay[] = [];
-    
-    // Get first day of month and its day of week
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const firstDay = new Date(year, month - 1, 1);
-    const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday
-    
-    // Add empty cells for days before month starts
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      currentWeek.push(null);
-    }
-    
-    // Add all days of the month
-    calendarData.days.forEach((day: any) => {
-      currentWeek.push(day);
-      
-      if (currentWeek.length === 7) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
-    });
-    
-    // Fill last week if needed
-    while (currentWeek.length < 7) {
-      currentWeek.push(null);
-    }
-    if (currentWeek.some(day => day !== null)) {
-      weeks.push(currentWeek);
-    }
-    
-    return weeks;
-  };
-
-  const getHeatmapColor = (level: number) => {
-    const colors = [
-      'bg-gray-100 dark:bg-gray-800',     // 0
-      'bg-green-100 dark:bg-green-900',   // 1
-      'bg-green-200 dark:bg-green-800',   // 2
-      'bg-green-400 dark:bg-green-600',   // 3
-      'bg-green-600 dark:bg-green-500'    // 4
-    ];
-    return colors[level] || colors[0];
   };
 
   const EmptyState = ({ message }: { message: string }) => (
@@ -464,7 +417,10 @@ export default function ChartsPage() {
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg flex items-center justify-between">
-                          <span>Calendar — Daily kWh</span>
+                          <div className="flex items-center space-x-2">
+                            <CalendarDays className="h-5 w-5" />
+                            <span>Calendar — Daily kWh</span>
+                          </div>
                           <div className="flex items-center space-x-2">
                             <Button variant="outline" size="sm" onClick={() => navigateMonth('prev')}>
                               <ChevronLeft className="h-4 w-4" />
@@ -474,6 +430,9 @@ export default function ChartsPage() {
                             </span>
                             <Button variant="outline" size="sm" onClick={() => navigateMonth('next')}>
                               <ChevronRight className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={resetToToday}>
+                              Today
                             </Button>
                           </div>
                         </CardTitle>
@@ -491,32 +450,10 @@ export default function ChartsPage() {
                                 Total: <Badge variant="outline">{calendarData.totalKwh} kWh</Badge>
                               </span>
                             </div>
-                            <div className="space-y-2">
-                              {/* Weekday headers */}
-                              <div className="grid grid-cols-7 gap-1 text-xs text-center font-medium">
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                  <div key={day} className="p-1">{day}</div>
-                                ))}
-                              </div>
-                              {/* Calendar grid */}
-                              {processCalendarData().map((week, weekIndex) => (
-                                <div key={weekIndex} className="grid grid-cols-7 gap-1">
-                                  {week.map((day, dayIndex) => (
-                                    <div
-                                      key={dayIndex}
-                                      className={`aspect-square flex items-center justify-center text-xs rounded ${
-                                        day 
-                                          ? `${getHeatmapColor(day.level)} cursor-pointer hover:ring-2 hover:ring-primary` 
-                                          : 'bg-transparent'
-                                      }`}
-                                      title={day ? `${day.day}: ${day.kwh} kWh` : ''}
-                                    >
-                                      {day ? day.day : ''}
-                                    </div>
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
+                            <CalendarKwh 
+                              month={selectedMonth}
+                              days={calendarData.days || []}
+                            />
                           </div>
                         )}
                       </CardContent>
