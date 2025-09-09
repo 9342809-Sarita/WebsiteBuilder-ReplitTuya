@@ -89,7 +89,8 @@ export async function getEnergyCalendar(deviceId: string, month?: string): Promi
 
 // Power Chart APIs
 export async function getPowerLast24h(deviceId: string): Promise<any> {
-  const res = await apiRequest("GET", `/api/power/last-24h?deviceId=${deviceId}`);
+  // Use thin=1 for potentially large payloads to enable server-side thinning
+  const res = await apiRequest("GET", `/api/power/last-24h?deviceId=${deviceId}&thin=1`);
   return res.json();
 }
 

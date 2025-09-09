@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -140,24 +140,32 @@ export default function ChartsPage() {
            (data.days && data.days.length === 0);
   };
 
-  // Data processing helpers
-  const processHourlyData = () => {
+  // Helper function for intelligent downsampling based on screen width
+  const downsampleForWidth = (points: any[], targetPoints: number = 1000) => {
+    if (points.length <= targetPoints) return points;
+    
+    const step = Math.ceil(points.length / targetPoints);
+    return points.filter((_, index) => index % step === 0);
+  };
+
+  // Memoized data processing helpers
+  const processedHourlyData = useMemo(() => {
     if (!todayHourlyData?.buckets) return [];
     return todayHourlyData.buckets.map((bucket: any) => ({
       hour: `${bucket.hour}:00`,
       kwh: bucket.kwh
     }));
-  };
+  }, [todayHourlyData]);
 
-  const processDailyData = () => {
+  const processedDailyData = useMemo(() => {
     if (!monthDailyData?.buckets) return [];
     return monthDailyData.buckets.map((bucket: any) => ({
       day: bucket.day,
       kwh: bucket.kwh
     }));
-  };
+  }, [monthDailyData]);
 
-  const processMonthlyData = () => {
+  const processedMonthlyData = useMemo(() => {
     if (!yearMonthlyData?.buckets) return [];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -165,32 +173,34 @@ export default function ChartsPage() {
       month: monthNames[bucket.month - 1],
       kwh: bucket.kwh
     }));
-  };
+  }, [yearMonthlyData]);
 
-  const processPower24hData = () => {
+  const processedPower24hData = useMemo(() => {
     if (!power24hData?.points) return [];
-    // Downsample if too many points for performance
+    
     const points = power24hData.points;
-    if (points.length <= 1000) return points.map((p: any) => ({
+    
+    // First transform timestamps to readable format
+    const transformedPoints = points.map((p: any) => ({
       time: new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       power: p.w
     }));
     
-    // Downsample to ~1000 points
-    const step = Math.ceil(points.length / 1000);
-    return points.filter((_: any, i: number) => i % step === 0).map((p: any) => ({
-      time: new Date(p.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      power: p.w
-    }));
-  };
+    // Apply intelligent downsampling based on device capabilities
+    // Mobile devices get more aggressive downsampling
+    const isMobile = window.innerWidth < 768;
+    const targetPoints = isMobile ? 500 : 1000;
+    
+    return downsampleForWidth(transformedPoints, targetPoints);
+  }, [power24hData]);
 
-  const processPower7dData = () => {
+  const processedPower7dData = useMemo(() => {
     if (!power7dData?.points) return [];
     return power7dData.points.map((point: any) => ({
       day: new Date(point.d).toLocaleDateString('en-US', { weekday: 'short', day: '2-digit' }),
       power: point.wAvg
     }));
-  };
+  }, [power7dData]);
 
   const EmptyState = ({ message }: { message: string }) => (
     <div className="flex items-center justify-center h-64 text-center">
@@ -346,7 +356,7 @@ export default function ChartsPage() {
                             </div>
                             <div className="h-64">
                               <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={processHourlyData()}>
+                                <BarChart data={processedHourlyData}>
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="hour" />
                                   <YAxis />
@@ -380,7 +390,7 @@ export default function ChartsPage() {
                             </div>
                             <div className="h-64">
                               <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={processDailyData()}>
+                                <BarChart data={processedDailyData}>
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="day" />
                                   <YAxis />
@@ -417,7 +427,7 @@ export default function ChartsPage() {
                             </div>
                             <div className="h-64">
                               <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={processMonthlyData()}>
+                                <BarChart data={processedMonthlyData}>
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="month" />
                                   <YAxis />
@@ -495,7 +505,7 @@ export default function ChartsPage() {
                       ) : (
                         <div className="h-80">
                           <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={processPower24hData()}>
+                            <LineChart data={processedPower24hData}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="time" />
                               <YAxis />
@@ -522,7 +532,7 @@ export default function ChartsPage() {
                       ) : (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={processPower7dData()}>
+                            <BarChart data={processedPower7dData}>
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="day" />
                               <YAxis />

@@ -6,13 +6,14 @@ const router = Router();
 const prisma = new PrismaClient();
 
 /**
- * GET /api/power/last-24h?deviceId=...
+ * GET /api/power/last-24h?deviceId=...&thin=1
  * Returns power readings for the last 24 hours with 3-second step-series resolution
  * Creates ~28,800 points using "last observation carried forward" interpolation
+ * Optional thin=1 parameter reduces payload size by taking every 2nd/4th point if > 1.5MB
  */
 router.get("/power/last-24h", async (req, res) => {
   try {
-    const { deviceId } = req.query;
+    const { deviceId, thin } = req.query;
 
     if (!deviceId) {
       return res.status(400).json({ 
@@ -143,12 +144,42 @@ router.get("/power/last-24h", async (req, res) => {
       });
     }
 
+    // Apply thinning if requested and payload is large
+    let finalPoints = points;
+    let actualResolutionSec = 3;
+    
+    if (thin === '1') {
+      // Estimate payload size (rough calculation)
+      const estimatedPayloadSize = JSON.stringify(points).length;
+      const TARGET_SIZE_MB = 1.5;
+      const TARGET_SIZE_BYTES = TARGET_SIZE_MB * 1024 * 1024;
+      
+      if (estimatedPayloadSize > TARGET_SIZE_BYTES) {
+        // Calculate thinning factor to get under target size
+        const compressionRatio = TARGET_SIZE_BYTES / estimatedPayloadSize;
+        let skipFactor = Math.max(2, Math.ceil(1 / compressionRatio));
+        
+        // Use power-of-2 skipping for better performance
+        skipFactor = skipFactor <= 2 ? 2 : skipFactor <= 4 ? 4 : 8;
+        
+        finalPoints = points.filter((_, index) => index % skipFactor === 0);
+        actualResolutionSec = 3 * skipFactor;
+        
+        console.log(`[POWER] Thinned ${points.length} points to ${finalPoints.length} (skip factor: ${skipFactor})`);
+      }
+    }
+
     res.json({
       from: toIsoIst(twentyFourHoursAgo),
       to: toIsoIst(now),
-      resolutionSec: 3,
-      points,
-      ok: true
+      resolutionSec: actualResolutionSec,
+      points: finalPoints,
+      ok: true,
+      ...(thin === '1' && finalPoints.length < points.length ? { 
+        thinned: true,
+        originalCount: points.length,
+        thinnedCount: finalPoints.length 
+      } : {})
     });
 
   } catch (error) {
