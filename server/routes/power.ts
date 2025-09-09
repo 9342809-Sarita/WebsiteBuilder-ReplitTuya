@@ -7,8 +7,8 @@ const prisma = new PrismaClient();
 
 /**
  * GET /api/power/last-24h?deviceId=...
- * Returns power readings for the last 24 hours with 3-second resolution
- * Uses RawHealth table for high-resolution power data
+ * Returns power readings for the last 24 hours with 3-second step-series resolution
+ * Creates ~28,800 points using "last observation carried forward" interpolation
  */
 router.get("/power/last-24h", async (req, res) => {
   try {
@@ -24,40 +24,125 @@ router.get("/power/last-24h", async (req, res) => {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - (24 * 60 * 60 * 1000));
 
-    // Query RawHealth table for raw power data
-    const powerData = await prisma.rawHealth.findMany({
+    // Strategy 1: Try Rollup1m first for power averages
+    let sourceData: Array<{ tsUtc: Date; powerW: number }> = [];
+    
+    const rollup1mData = await prisma.rollup1m.findMany({
       where: {
         deviceId: deviceId as string,
-        tsUtc: { 
+        windowUtc: { 
           gte: twentyFourHoursAgo, 
           lte: now 
         },
-        powerW: { not: null } // Only include records with power data
+        avgPowerW: { not: null }
       },
       select: { 
-        tsUtc: true, 
-        powerW: true 
+        windowUtc: true, 
+        avgPowerW: true 
       },
-      orderBy: { tsUtc: 'asc' }
+      orderBy: { windowUtc: 'asc' }
     });
 
-    if (powerData.length === 0) {
+    if (rollup1mData.length > 0) {
+      sourceData = rollup1mData.map(d => ({
+        tsUtc: d.windowUtc,
+        powerW: d.avgPowerW || 0
+      }));
+    } else {
+      // Strategy 2: Fallback to RawHealth if no rollup data
+      const rawHealthData = await prisma.rawHealth.findMany({
+        where: {
+          deviceId: deviceId as string,
+          tsUtc: { 
+            gte: twentyFourHoursAgo, 
+            lte: now 
+          },
+          powerW: { not: null }
+        },
+        select: { 
+          tsUtc: true, 
+          powerW: true 
+        },
+        orderBy: { tsUtc: 'asc' }
+      });
+
+      sourceData = rawHealthData.map(d => ({
+        tsUtc: d.tsUtc,
+        powerW: d.powerW || 0
+      }));
+    }
+
+    if (sourceData.length === 0) {
+      // Strategy 3: Derive from energy data if available
+      const energyData = await prisma.rawEnergy.findMany({
+        where: {
+          deviceId: deviceId as string,
+          tsUtc: { 
+            gte: twentyFourHoursAgo, 
+            lte: now 
+          }
+        },
+        select: { 
+          tsUtc: true, 
+          addEleKwh: true 
+        },
+        orderBy: { tsUtc: 'asc' }
+      });
+
+      if (energyData.length >= 2) {
+        // Derive power from consecutive energy samples
+        for (let i = 1; i < energyData.length; i++) {
+          const t1 = energyData[i - 1];
+          const t2 = energyData[i];
+          const kwhDiff = Number(t2.addEleKwh) - Number(t1.addEleKwh);
+          const timeDiffHours = (t2.tsUtc.getTime() - t1.tsUtc.getTime()) / (1000 * 60 * 60);
+          
+          if (timeDiffHours > 0 && kwhDiff >= 0) {
+            const powerW = Math.round((kwhDiff * 1000) / timeDiffHours);
+            sourceData.push({
+              tsUtc: t2.tsUtc,
+              powerW
+            });
+          }
+        }
+      }
+    }
+
+    if (sourceData.length === 0) {
       return res.json({
         ok: false,
         reason: "NO_DATA"
       });
     }
 
-    // Convert to response format with IST timestamps
-    const points = powerData.map(d => ({
-      t: toIsoIst(d.tsUtc), // Use centralized IST conversion
-      w: d.powerW || 0
-    }));
+    // Create 3-second grid: ~28,800 points over 24 hours
+    const points: Array<{ t: string; w: number }> = [];
+    const startTime = twentyFourHoursAgo.getTime();
+    const endTime = now.getTime();
+    const stepMs = 3 * 1000; // 3 seconds in milliseconds
+
+    let sourceIndex = 0;
+    let lastObservedPower = 0;
+
+    for (let currentTime = startTime; currentTime <= endTime; currentTime += stepMs) {
+      const currentDate = new Date(currentTime);
+      
+      // Update last observed power if we have a newer source point
+      while (sourceIndex < sourceData.length && sourceData[sourceIndex].tsUtc.getTime() <= currentTime) {
+        lastObservedPower = sourceData[sourceIndex].powerW;
+        sourceIndex++;
+      }
+
+      points.push({
+        t: toIsoIst(currentDate),
+        w: lastObservedPower
+      });
+    }
 
     res.json({
       from: toIsoIst(twentyFourHoursAgo),
       to: toIsoIst(now),
-      resolutionSec: 3, // Approximate resolution based on data collection frequency
+      resolutionSec: 3,
       points,
       ok: true
     });
@@ -73,8 +158,8 @@ router.get("/power/last-24h", async (req, res) => {
 
 /**
  * GET /api/power/last-7d?deviceId=...
- * Returns daily average power readings for the last 7 days
- * Uses Rollup1h table for aggregated daily averages
+ * Returns daily average power for last 7 IST days computed from kWh data
+ * Formula: W_avg(day) = (kWh_day * 1000) / 24
  */
 router.get("/power/last-7d", async (req, res) => {
   try {
@@ -90,56 +175,45 @@ router.get("/power/last-7d", async (req, res) => {
     const today = getIstDayStart();
     const sevenDaysAgo = new Date(today.getTime() - (6 * 24 * 60 * 60 * 1000)); // 7 days including today
 
-    // Query Rollup1h table for the last 7 days
-    const hourlyData = await prisma.rollup1h.findMany({
+    // Query DailyKwh table for the last 7 days
+    const dailyKwhData = await prisma.dailyKwh.findMany({
       where: {
         deviceId: deviceId as string,
-        windowUtc: { 
-          gte: sevenDaysAgo, 
-          lt: new Date(today.getTime() + (24 * 60 * 60 * 1000)) // End of today
-        },
-        avgPowerW: { not: null } // Only include records with power data
+        dayIst: { 
+          gte: new Date(sevenDaysAgo.getTime() + (5.5 * 60 * 60 * 1000)), // Convert to IST
+          lt: new Date(today.getTime() + (24 * 60 * 60 * 1000) + (5.5 * 60 * 60 * 1000)) // End of today in IST
+        }
       },
       select: { 
-        windowUtc: true, 
-        avgPowerW: true 
+        dayIst: true, 
+        kwh: true 
       },
-      orderBy: { windowUtc: 'asc' }
+      orderBy: { dayIst: 'asc' }
     });
 
-    if (hourlyData.length === 0) {
+    if (dailyKwhData.length === 0) {
       return res.json({
         ok: false,
         reason: "NO_DATA"
       });
     }
 
-    // Group by IST day and calculate daily averages
-    const dailyAverages: { [dateStr: string]: { total: number; count: number } } = {};
-    
-    hourlyData.forEach(d => {
-      // Convert to IST for grouping by day
-      const istTime = new Date(d.windowUtc.getTime() + (5.5 * 60 * 60 * 1000));
-      const dateStr = istTime.toISOString().split('T')[0]; // YYYY-MM-DD in IST
-      const power = d.avgPowerW || 0;
-      
-      if (!dailyAverages[dateStr]) {
-        dailyAverages[dateStr] = { total: 0, count: 0 };
-      }
-      
-      dailyAverages[dateStr].total += power;
-      dailyAverages[dateStr].count += 1;
-    });
-
-    // Create points array for last 7 days
+    // Create exactly 7 points for the last 7 days
     const points = [];
     for (let i = 6; i >= 0; i--) {
-      const date = new Date(today.getTime() + (i * 24 * 60 * 60 * 1000));
-      const istDate = new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
-      const dateStr = istDate.toISOString().split('T')[0]; // YYYY-MM-DD in IST
+      const targetDate = new Date(today.getTime() - (i * 24 * 60 * 60 * 1000));
+      const istTargetDate = new Date(targetDate.getTime() + (5.5 * 60 * 60 * 1000));
+      const dateStr = istTargetDate.toISOString().split('T')[0]; // YYYY-MM-DD in IST
       
-      const dayData = dailyAverages[dateStr];
-      const wAvg = dayData ? Math.round(dayData.total / dayData.count) : 0;
+      // Find matching daily kWh data
+      const dayData = dailyKwhData.find(d => {
+        const dayDateStr = d.dayIst.toISOString().split('T')[0];
+        return dayDateStr === dateStr;
+      });
+      
+      // Compute daily average power: W_avg = (kWh_day * 1000) / 24
+      const kwhDay = dayData ? Number(dayData.kwh) : 0;
+      const wAvg = Math.round((kwhDay * 1000) / 24);
       
       points.push({
         d: dateStr,
