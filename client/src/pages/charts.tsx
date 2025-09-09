@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,7 +27,10 @@ interface Device {
 }
 
 export default function ChartsPage() {
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>(() => {
+    return localStorage.getItem("selectedDeviceId") ?? "";
+  });
+  const initRef = useRef(false);
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -54,21 +57,16 @@ export default function ChartsPage() {
     });
   }, [allDevices, deviceSettings]);
 
-  // Load stored device ID from localStorage on mount (runs only once when devices first load)
   useEffect(() => {
-    if (devices.length === 0) return; // Wait for devices to load
-    
-    const storedDeviceId = localStorage.getItem('selectedDeviceId');
-    if (storedDeviceId && devices.find((d: Device) => d.deviceId === storedDeviceId)) {
-      // Only set if it's not already the selected device
-      if (selectedDeviceId !== storedDeviceId) {
-        setSelectedDeviceId(storedDeviceId);
-      }
-    } else if (!selectedDeviceId && devices.length > 0) {
-      // Only set first device if no device is currently selected
-      setSelectedDeviceId(devices[0].deviceId);
-    }
-  }, [devices, selectedDeviceId]); // Include selectedDeviceId but with conditions to prevent loops
+    if (initRef.current) return;
+    if (devices.length === 0) return;
+
+    const stored = localStorage.getItem("selectedDeviceId");
+    const exists = stored && devices.some(d => d.deviceId === stored);
+    setSelectedDeviceId(exists ? stored! : devices[0].deviceId);
+
+    initRef.current = true; // lock after first initialization
+  }, [devices.length]); // only react when device list size becomes available
 
   // Save device selection to localStorage
   useEffect(() => {
