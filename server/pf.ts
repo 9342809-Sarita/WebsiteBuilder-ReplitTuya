@@ -53,3 +53,36 @@ export async function getPfSource(db: PrismaClient): Promise<"tuya" | "calculate
 export function clearPfCache(): void {
   pfCache = null;
 }
+
+/**
+ * Choose the appropriate PF value based on the source setting
+ * @param pfSource The configured PF source ("tuya" or "calculated")
+ * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
+ * @param estPf Calculated PF estimate (0..1)
+ * @returns The chosen PF value or null if none available
+ */
+export function choosePf(
+  pfSource: "tuya"|"calculated",
+  tuyaPf?: number | null,   // 0..1 (after scaling)
+  estPf?:  number | null    // 0..1
+): number | null {
+  if (pfSource === "tuya" && tuyaPf != null) return tuyaPf;
+  if (estPf != null) return estPf;
+  return tuyaPf ?? null; // last fallback
+}
+
+/**
+ * Resolve the appropriate PF value using the global setting from database
+ * @param db Prisma client instance
+ * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
+ * @param estPf Calculated PF estimate (0..1)
+ * @returns Promise<number|null> The resolved PF value
+ */
+export async function resolvePf(
+  db: PrismaClient,
+  tuyaPf?: number|null,
+  estPf?: number|null
+): Promise<number|null> {
+  const src = await getPfSource(db);
+  return choosePf(src, tuyaPf, estPf);
+}
