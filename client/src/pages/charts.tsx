@@ -6,9 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from "recharts";
-import { Activity, Zap, Calendar, BarChart3, Smartphone, Monitor, Home, CheckCircle, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { Activity, Zap, Calendar, BarChart3, Smartphone, Monitor, Home, CheckCircle, ChevronLeft, ChevronRight, CalendarDays, Database } from "lucide-react";
 import { PageLayout } from "@/components/page-layout";
 import { CalendarKwh } from "@/components/CalendarKwh";
+import { NoDataAlert } from "@/components/NoDataAlert";
+import { Link } from "wouter";
 import { 
   getEnergyTodayHourly, 
   getEnergyMonthDaily, 
@@ -130,6 +132,14 @@ export default function ChartsPage() {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
   };
 
+  // Helper to check if data response is empty
+  const isDataEmpty = (data: any) => {
+    return !data || data.ok === false || 
+           (data.buckets && data.buckets.length === 0) ||
+           (data.points && data.points.length === 0) ||
+           (data.days && data.days.length === 0);
+  };
+
   // Data processing helpers
   const processHourlyData = () => {
     if (!todayHourlyData?.buckets) return [];
@@ -203,6 +213,14 @@ export default function ChartsPage() {
       title="Energy Charts" 
       subtitle="Device power consumption and energy usage analytics"
       showConnectionStatus={false}
+      headerAction={
+        <Link href="/raw-data">
+          <Button variant="outline" size="sm" className="flex items-center space-x-2">
+            <Database className="h-4 w-4" />
+            <span>Raw Data</span>
+          </Button>
+        </Link>
+      }
     >
       <div className="space-y-6">
         {/* Device Selection */}
@@ -317,8 +335,8 @@ export default function ChartsPage() {
                       <CardContent>
                         {todayHourlyLoading ? (
                           <ChartSkeleton />
-                        ) : !todayHourlyData?.ok ? (
-                          <EmptyState message="No data for this device today" />
+                        ) : isDataEmpty(todayHourlyData) ? (
+                          <NoDataAlert />
                         ) : (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -351,8 +369,8 @@ export default function ChartsPage() {
                       <CardContent>
                         {monthDailyLoading ? (
                           <ChartSkeleton />
-                        ) : !monthDailyData?.ok ? (
-                          <EmptyState message="No data for this device this month" />
+                        ) : isDataEmpty(monthDailyData) ? (
+                          <NoDataAlert />
                         ) : (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -388,8 +406,8 @@ export default function ChartsPage() {
                       <CardContent>
                         {yearMonthlyLoading ? (
                           <ChartSkeleton />
-                        ) : !yearMonthlyData?.ok ? (
-                          <EmptyState message="No data for this device this year" />
+                        ) : isDataEmpty(yearMonthlyData) ? (
+                          <NoDataAlert />
                         ) : (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -441,8 +459,8 @@ export default function ChartsPage() {
                       <CardContent>
                         {calendarLoading ? (
                           <ChartSkeleton />
-                        ) : !calendarData?.ok ? (
-                          <EmptyState message="No data for this device in selected month" />
+                        ) : isDataEmpty(calendarData) ? (
+                          <NoDataAlert />
                         ) : (
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -472,8 +490,8 @@ export default function ChartsPage() {
                     <CardContent>
                       {power24hLoading ? (
                         <ChartSkeleton />
-                      ) : !power24hData?.ok ? (
-                        <EmptyState message="No power data for this device in the last 24 hours" />
+                      ) : isDataEmpty(power24hData) ? (
+                        <NoDataAlert />
                       ) : (
                         <div className="h-80">
                           <ResponsiveContainer width="100%" height="100%">
@@ -499,8 +517,8 @@ export default function ChartsPage() {
                     <CardContent>
                       {power7dLoading ? (
                         <ChartSkeleton />
-                      ) : !power7dData?.ok ? (
-                        <EmptyState message="No power data for this device in the last 7 days" />
+                      ) : isDataEmpty(power7dData) ? (
+                        <NoDataAlert />
                       ) : (
                         <div className="h-64">
                           <ResponsiveContainer width="100%" height="100%">

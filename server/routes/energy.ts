@@ -171,8 +171,23 @@ router.get("/series", async (req, res) => {
       v: point.v
     }));
 
+    // Check if we have any data
+    if (response.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        deviceId,
+        metric,
+        granularity: gran,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        count: 0,
+        data: []
+      });
+    }
+
     res.json({
-      success: true,
+      ok: true,
       deviceId,
       metric,
       granularity: gran,
@@ -232,8 +247,21 @@ router.get("/events", async (req, res) => {
       payload: event.payload
     }));
 
+    // Check if we have any data
+    if (response.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        deviceId: deviceId || 'all',
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        count: 0,
+        events: []
+      });
+    }
+
     res.json({
-      success: true,
+      ok: true,
       deviceId: deviceId || 'all',
       startTime: startTime.toISOString(),
       endTime: endTime.toISOString(),
@@ -295,8 +323,21 @@ router.get("/daily-kwh", async (req, res) => {
       kwh: Number(d.kwh)
     }));
 
+    // Check if we have any data
+    if (response.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        device,
+        startDay: startDate.toISOString().split('T')[0],
+        endDay: endDate.toISOString().split('T')[0],
+        count: 0,
+        data: []
+      });
+    }
+
     res.json({
-      success: true,
+      ok: true,
       device, // <-- frontend will read the name from here
       startDay: startDate.toISOString().split('T')[0],
       endDay: endDate.toISOString().split('T')[0],

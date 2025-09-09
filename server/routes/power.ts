@@ -111,7 +111,11 @@ router.get("/power/last-24h", async (req, res) => {
     if (sourceData.length === 0) {
       return res.json({
         ok: false,
-        reason: "NO_DATA"
+        reason: "NO_DATA",
+        from: toIsoIst(twentyFourHoursAgo),
+        to: toIsoIst(now),
+        resolutionSec: 3,
+        points: []
       });
     }
 
@@ -194,7 +198,11 @@ router.get("/power/last-7d", async (req, res) => {
     if (dailyKwhData.length === 0) {
       return res.json({
         ok: false,
-        reason: "NO_DATA"
+        reason: "NO_DATA",
+        from: "",
+        to: "",
+        resolution: "1d",
+        points: []
       });
     }
 

@@ -12,6 +12,7 @@ interface PageLayoutProps {
   subtitle?: string;
   showConnectionStatus?: boolean;
   className?: string;
+  headerAction?: ReactNode;
 }
 
 export function PageLayout({ 
@@ -19,7 +20,8 @@ export function PageLayout({
   title = "Enerlytics", 
   subtitle = "Smart Life device monitoring system",
   showConnectionStatus = true,
-  className = ""
+  className = "",
+  headerAction
 }: PageLayoutProps) {
   // Health check query for connection status
   const { data: healthData } = useQuery({
@@ -63,11 +65,20 @@ export function PageLayout({
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {subtitle && (
-          <div className="mb-4 sm:mb-6">
-            <p className="text-sm text-muted-foreground">
-              {subtitle}
-            </p>
+        {(subtitle || headerAction) && (
+          <div className="mb-4 sm:mb-6 flex items-center justify-between">
+            <div>
+              {subtitle && (
+                <p className="text-sm text-muted-foreground">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+            {headerAction && (
+              <div className="flex-shrink-0">
+                {headerAction}
+              </div>
+            )}
           </div>
         )}
         {children}
