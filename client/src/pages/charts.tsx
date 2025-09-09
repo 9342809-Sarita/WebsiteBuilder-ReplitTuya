@@ -221,7 +221,14 @@ export default function ChartsPage() {
   return (
     <PageLayout 
       title="Energy Charts" 
-      subtitle="Device power consumption and energy usage analytics"
+      subtitle={
+        <div className="flex items-center space-x-3">
+          <span>Device power consumption and energy usage analytics</span>
+          <Badge variant="secondary" className="text-xs">
+            Asia/Kolkata
+          </Badge>
+        </div>
+      }
       showConnectionStatus={false}
       headerAction={
         <Link href="/raw-data">

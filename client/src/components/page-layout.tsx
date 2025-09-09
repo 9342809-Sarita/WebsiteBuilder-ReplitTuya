@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 interface PageLayoutProps {
   children: ReactNode;
   title?: string;
-  subtitle?: string;
+  subtitle?: string | ReactNode;
   showConnectionStatus?: boolean;
   className?: string;
   headerAction?: ReactNode;
@@ -69,9 +69,9 @@ export function PageLayout({
           <div className="mb-4 sm:mb-6 flex items-center justify-between">
             <div>
               {subtitle && (
-                <p className="text-sm text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   {subtitle}
-                </p>
+                </div>
               )}
             </div>
             {headerAction && (
