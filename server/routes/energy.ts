@@ -316,6 +316,7 @@ router.get("/daily-kwh", async (req, res) => {
 /**
  * GET /api/energy/today-hourly?deviceId=...
  * Returns hourly kWh consumption for today in IST timezone
+ * Strategy: Use Rollup1h if kwh exists, fallback to Rollup1m aggregation, or compute from RawEnergy
  */
 router.get("/energy/today-hourly", async (req, res) => {
   try {
@@ -329,18 +330,19 @@ router.get("/energy/today-hourly", async (req, res) => {
 
     // Get today's IST day boundaries using centralized time functions
     const startOfDay = getIstDayStart();
-    const endOfDay = getIstNextDayStart();
+    const now = new Date();
     
     // Format date string for response
     const istStartDate = new Date(startOfDay.getTime() + (5.5 * 60 * 60 * 1000));
     const dateStr = istStartDate.toISOString().split('T')[0]; // YYYY-MM-DD format
 
+    // Strategy 1: Try Rollup1h first
     const hourlyData = await prisma.rollup1h.findMany({
       where: {
         deviceId: deviceId as string,
         windowUtc: { 
           gte: startOfDay, 
-          lte: endOfDay 
+          lt: now // Use current time, not next day start
         }
       },
       select: { 
@@ -350,7 +352,68 @@ router.get("/energy/today-hourly", async (req, res) => {
       orderBy: { windowUtc: 'asc' }
     });
 
-    if (hourlyData.length === 0) {
+    let buckets: Array<{ hour: number; kwh: number }>;
+
+    if (hourlyData.length > 0 && hourlyData.some(d => d.kwh !== null)) {
+      // Use Rollup1h data
+      buckets = Array.from({ length: 24 }, (_, hour) => {
+        // Find rollup data for this hour
+        const hourData = hourlyData.find(d => {
+          const istTime = new Date(d.windowUtc.getTime() + (5.5 * 60 * 60 * 1000));
+          return istTime.getHours() === hour;
+        });
+        return {
+          hour,
+          kwh: hourData && hourData.kwh ? Number(hourData.kwh) : 0
+        };
+      });
+    } else {
+      // Strategy 2: Fallback to Rollup1m aggregation
+      const minuteData = await prisma.rollup1m.findMany({
+        where: {
+          deviceId: deviceId as string,
+          windowUtc: { 
+            gte: startOfDay, 
+            lt: now
+          }
+        },
+        select: { 
+          windowUtc: true, 
+          kwh: true 
+        },
+        orderBy: { windowUtc: 'asc' }
+      });
+
+      if (minuteData.length > 0 && minuteData.some(d => d.kwh !== null)) {
+        // Aggregate 1-minute data into hourly buckets
+        const hourlyTotals: { [hour: number]: number } = {};
+        
+        minuteData.forEach(d => {
+          if (d.kwh) {
+            const istTime = new Date(d.windowUtc.getTime() + (5.5 * 60 * 60 * 1000));
+            const hour = istTime.getHours();
+            hourlyTotals[hour] = (hourlyTotals[hour] || 0) + Number(d.kwh);
+          }
+        });
+
+        buckets = Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          kwh: Number((hourlyTotals[hour] || 0).toFixed(3))
+        }));
+      } else {
+        // Strategy 3: Compute from RawEnergy increments (if needed)
+        // For now, return empty buckets as this is more complex
+        buckets = Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          kwh: 0
+        }));
+      }
+    }
+
+    // Check if we have any data
+    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
+    
+    if (totalKwh === 0 && hourlyData.length === 0) {
       return res.json({
         ok: false,
         reason: "NO_DATA",
@@ -358,19 +421,6 @@ router.get("/energy/today-hourly", async (req, res) => {
         totalKwh: 0
       });
     }
-
-    // Create 24-hour buckets (0-23)
-    const buckets = Array.from({ length: 24 }, (_, hour) => {
-      const hourData = hourlyData.find(d => 
-        new Date(d.windowUtc).getUTCHours() === hour
-      );
-      return {
-        hour,
-        kwh: hourData ? Number(hourData.kwh || 0) : 0
-      };
-    });
-
-    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
 
     res.json({
       date: dateStr,
@@ -391,6 +441,7 @@ router.get("/energy/today-hourly", async (req, res) => {
 /**
  * GET /api/energy/month-daily?deviceId=...&month=YYYY-MM
  * Returns daily kWh consumption for specified month (defaults to current IST month)
+ * Uses DailyKwh table with IST day boundaries
  */
 router.get("/energy/month-daily", async (req, res) => {
   try {
@@ -407,15 +458,16 @@ router.get("/energy/month-daily", async (req, res) => {
     const { start: startOfMonth, end: endOfMonth } = getIstMonthRange(monthStr);
     
     // Extract year and month for calculating days in month
-    const currentMonthStr = monthStr || getIstMonthRange().start.toISOString().substr(0, 7);
+    const currentMonthStr = monthStr || new Date(startOfMonth.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().substr(0, 7);
     const [year, monthNum] = currentMonthStr.split('-').map(Number);
 
+    // Query DailyKwh table - dayIst is already in IST timezone
     const dailyData = await prisma.dailyKwh.findMany({
       where: {
         deviceId: deviceId as string,
         dayIst: { 
-          gte: startOfMonth, 
-          lte: endOfMonth 
+          gte: new Date(year, monthNum - 1, 1), // Start of month in IST
+          lt: new Date(year, monthNum, 1) // Start of next month in IST
         }
       },
       select: { 
@@ -425,7 +477,25 @@ router.get("/energy/month-daily", async (req, res) => {
       orderBy: { dayIst: 'asc' }
     });
 
-    if (dailyData.length === 0) {
+    // Create buckets for each day of the month, filling missing days with 0
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+    const buckets = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const dayData = dailyData.find(d => 
+        d.dayIst.getDate() === day && 
+        d.dayIst.getMonth() === monthNum - 1 &&
+        d.dayIst.getFullYear() === year
+      );
+      return {
+        day,
+        kwh: dayData ? Number(dayData.kwh) : 0
+      };
+    });
+
+    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
+
+    // Check if we have any data
+    if (totalKwh === 0 && dailyData.length === 0) {
       return res.json({
         ok: false,
         reason: "NO_DATA",
@@ -434,23 +504,8 @@ router.get("/energy/month-daily", async (req, res) => {
       });
     }
 
-    // Create buckets for each day of the month
-    const daysInMonth = new Date(year, monthNum, 0).getDate();
-    const buckets = Array.from({ length: daysInMonth }, (_, index) => {
-      const day = index + 1;
-      const dayData = dailyData.find(d => 
-        d.dayIst.getDate() === day
-      );
-      return {
-        day,
-        kwh: dayData ? Number(dayData.kwh || 0) : 0
-      };
-    });
-
-    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
-
     res.json({
-      month: monthStr,
+      month: currentMonthStr,
       buckets,
       totalKwh: Number(totalKwh.toFixed(3)),
       ok: true
@@ -468,6 +523,7 @@ router.get("/energy/month-daily", async (req, res) => {
 /**
  * GET /api/energy/year-monthly?deviceId=...&year=YYYY
  * Returns monthly kWh consumption for specified year (defaults to current IST year)
+ * Aggregates DailyKwh data by month
  */
 router.get("/energy/year-monthly", async (req, res) => {
   try {
@@ -482,13 +538,17 @@ router.get("/energy/year-monthly", async (req, res) => {
     // Use centralized time function for year range
     const yearNum = year ? parseInt(year as string) : undefined;
     const { start: startOfYear, end: endOfYear } = getIstYearRange(yearNum);
+    
+    // Get the actual year number for response and queries
+    const actualYear = yearNum || new Date(startOfYear.getTime() + (5.5 * 60 * 60 * 1000)).getFullYear();
 
+    // Query DailyKwh table for the entire year - dayIst is already in IST timezone
     const dailyData = await prisma.dailyKwh.findMany({
       where: {
         deviceId: deviceId as string,
         dayIst: { 
-          gte: startOfYear, 
-          lte: endOfYear 
+          gte: new Date(actualYear, 0, 1), // Jan 1 in IST
+          lt: new Date(actualYear + 1, 0, 1) // Jan 1 next year in IST
         }
       },
       select: { 
@@ -498,14 +558,14 @@ router.get("/energy/year-monthly", async (req, res) => {
       orderBy: { dayIst: 'asc' }
     });
 
-    // Aggregate by month
+    // Aggregate daily data by month
     const monthlyTotals: { [month: number]: number } = {};
     dailyData.forEach(d => {
       const month = d.dayIst.getMonth() + 1; // 1-12
-      monthlyTotals[month] = (monthlyTotals[month] || 0) + Number(d.kwh || 0);
+      monthlyTotals[month] = (monthlyTotals[month] || 0) + Number(d.kwh);
     });
 
-    // Create buckets for all 12 months
+    // Create buckets for all 12 months, filling missing months with 0
     const buckets = Array.from({ length: 12 }, (_, index) => {
       const month = index + 1;
       return {
@@ -516,8 +576,15 @@ router.get("/energy/year-monthly", async (req, res) => {
 
     const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
 
-    // Get the actual year number for response
-    const actualYear = yearNum || new Date(startOfYear.getTime() + (5.5 * 60 * 60 * 1000)).getFullYear();
+    // Check if we have any data
+    if (totalKwh === 0 && dailyData.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        buckets: [],
+        totalKwh: 0
+      });
+    }
     
     res.json({
       year: actualYear,
@@ -538,6 +605,7 @@ router.get("/energy/year-monthly", async (req, res) => {
 /**
  * GET /api/energy/calendar?deviceId=...&month=YYYY-MM
  * Returns calendar view of daily kWh consumption with activity levels (0-4)
+ * Uses same month range as month-daily, with heatmap intensity levels
  */
 router.get("/energy/calendar", async (req, res) => {
   try {
@@ -549,23 +617,21 @@ router.get("/energy/calendar", async (req, res) => {
       });
     }
 
-    // Default to current month in IST
-    const now = new Date();
-    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
-    const defaultMonth = istNow.toISOString().substr(0, 7); // YYYY-MM
-    const monthStr = (month as string) || defaultMonth;
+    // Use centralized time function for month range (same as month-daily)
+    const monthStr = (month as string);
+    const { start: startOfMonth, end: endOfMonth } = getIstMonthRange(monthStr);
+    
+    // Extract year and month for calculating days in month
+    const currentMonthStr = monthStr || new Date(startOfMonth.getTime() + (5.5 * 60 * 60 * 1000)).toISOString().substr(0, 7);
+    const [year, monthNum] = currentMonthStr.split('-').map(Number);
 
-    // Parse month and create date range
-    const [year, monthNum] = monthStr.split('-').map(Number);
-    const startOfMonth = new Date(year, monthNum - 1, 1);
-    const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59, 999);
-
+    // Query DailyKwh table - dayIst is already in IST timezone
     const dailyData = await prisma.dailyKwh.findMany({
       where: {
         deviceId: deviceId as string,
         dayIst: { 
-          gte: startOfMonth, 
-          lte: endOfMonth 
+          gte: new Date(year, monthNum - 1, 1), // Start of month in IST
+          lt: new Date(year, monthNum, 1) // Start of next month in IST
         }
       },
       select: { 
@@ -575,38 +641,70 @@ router.get("/energy/calendar", async (req, res) => {
       orderBy: { dayIst: 'asc' }
     });
 
-    // Calculate activity levels based on kWh usage
-    const kwhValues = dailyData.map(d => Number(d.kwh || 0)).filter(v => v > 0);
-    const maxKwh = Math.max(...kwhValues, 1); // Avoid division by zero
+    // Calculate activity levels based on kWh usage quantiles
+    const kwhValues = dailyData.map(d => Number(d.kwh)).filter(v => v > 0);
+    
+    // Define activity level thresholds (0-4 scale)
+    let getActivityLevel: (kwh: number) => number;
+    
+    if (kwhValues.length > 0) {
+      // Sort for quantile calculation
+      kwhValues.sort((a, b) => a - b);
+      const q25 = kwhValues[Math.floor(kwhValues.length * 0.25)] || 0;
+      const q50 = kwhValues[Math.floor(kwhValues.length * 0.50)] || 0;
+      const q75 = kwhValues[Math.floor(kwhValues.length * 0.75)] || 0;
+      const q90 = kwhValues[Math.floor(kwhValues.length * 0.90)] || 0;
+      
+      getActivityLevel = (kwh: number) => {
+        if (kwh === 0) return 0;
+        if (kwh <= q25) return 1;
+        if (kwh <= q50) return 2;
+        if (kwh <= q75) return 3;
+        return 4;
+      };
+    } else {
+      // Fallback to simple thresholds if no data
+      getActivityLevel = (kwh: number) => {
+        if (kwh === 0) return 0;
+        if (kwh < 1) return 1;
+        if (kwh < 5) return 2;
+        if (kwh < 10) return 3;
+        return 4;
+      };
+    }
 
     // Create days array for calendar view
     const daysInMonth = new Date(year, monthNum, 0).getDate();
     const days = Array.from({ length: daysInMonth }, (_, index) => {
       const day = index + 1;
-      const dayData = dailyData.find(d => d.dayIst.getDate() === day);
-      const kwh = dayData ? Number(dayData.kwh || 0) : 0;
+      const dayData = dailyData.find(d => 
+        d.dayIst.getDate() === day && 
+        d.dayIst.getMonth() === monthNum - 1 &&
+        d.dayIst.getFullYear() === year
+      );
+      const kwh = dayData ? Number(dayData.kwh) : 0;
       
-      // Calculate activity level (0-4 scale)
-      let level = 0;
-      if (kwh > 0) {
-        const ratio = kwh / maxKwh;
-        if (ratio <= 0.2) level = 1;
-        else if (ratio <= 0.4) level = 2;
-        else if (ratio <= 0.7) level = 3;
-        else level = 4;
-      }
-
       return {
         day,
         kwh: Number(kwh.toFixed(3)),
-        level
+        level: getActivityLevel(kwh)
       };
     });
 
     const totalKwh = days.reduce((sum, day) => sum + day.kwh, 0);
 
+    // Check if we have any data
+    if (totalKwh === 0 && dailyData.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        days: [],
+        totalKwh: 0
+      });
+    }
+
     res.json({
-      month: monthStr,
+      month: currentMonthStr,
       days,
       totalKwh: Number(totalKwh.toFixed(3)),
       ok: true
