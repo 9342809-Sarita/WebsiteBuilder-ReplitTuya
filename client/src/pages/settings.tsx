@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { getDevices } from "@/lib/api";
+import { getDevices, getAppSettings, setAppSettings } from "@/lib/api";
 import type { TuyaDevice } from "@/lib/api";
 import { 
   Settings, 
@@ -45,6 +46,7 @@ interface DeviceSettings {
 
 export default function SettingsPage() {
   const [specifications, setSpecifications] = useState<{ [deviceId: string]: string }>({});
+  const [pfSource, setPfSource] = useState<"tuya" | "calculated">("calculated");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -77,6 +79,17 @@ export default function SettingsPage() {
   } = useQuery({
     queryKey: ["/api/device-settings"],
     enabled: false, // Load after devices are loaded
+  });
+
+  // Fetch app settings (PF source)
+  const { 
+    data: appSettingsData, 
+    isLoading: isLoadingAppSettings,
+    refetch: refetchAppSettings 
+  } = useQuery({
+    queryKey: ["/api/app-settings"],
+    queryFn: getAppSettings,
+    enabled: true, // Auto-load on mount
   });
 
   const devices: TuyaDevice[] = (devicesData as any)?.result?.devices || 
@@ -156,6 +169,25 @@ export default function SettingsPage() {
     },
   });
 
+  // Mutation for updating app settings (PF source)
+  const updateAppSettingsMutation = useMutation({
+    mutationFn: setAppSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/app-settings"] });
+      toast({
+        title: "Success",
+        description: "Power factor source updated successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update power factor source",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Load devices on page load
   useEffect(() => {
     refetchDevices();
@@ -179,6 +211,13 @@ export default function SettingsPage() {
       setSpecifications(specsMap);
     }
   }, [deviceSpecs]);
+
+  // Initialize PF source state from loaded app settings
+  useEffect(() => {
+    if (appSettingsData?.ok && appSettingsData.pfSource) {
+      setPfSource(appSettingsData.pfSource);
+    }
+  }, [appSettingsData]);
 
   const handleSpecificationChange = (deviceId: string, value: string) => {
     setSpecifications(prev => ({
@@ -247,6 +286,10 @@ export default function SettingsPage() {
     });
   };
 
+  const handleSavePfSource = () => {
+    updateAppSettingsMutation.mutate(pfSource);
+  };
+
   return (
     <PageLayout 
       title="Device Settings" 
@@ -254,6 +297,75 @@ export default function SettingsPage() {
       showConnectionStatus={false}
     >
       <div className="space-y-6">
+        {/* Power Factor Source Settings */}
+        <div className="space-y-4">
+          <Card className="shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Settings className="h-5 w-5" />
+                <span>Power Factor Source</span>
+              </CardTitle>
+              <CardDescription>
+                Choose whether to use direct Tuya power factor readings or calculate from voltage, current, and power
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isLoadingAppSettings ? (
+                <div className="flex items-center space-x-2 text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Loading settings...</span>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <RadioGroup 
+                    value={pfSource} 
+                    onValueChange={(value: "tuya" | "calculated") => setPfSource(value)}
+                    className="space-y-3"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="tuya" id="pf-tuya" />
+                      <Label htmlFor="pf-tuya" className="flex-1 cursor-pointer">
+                        <div>
+                          <div className="font-medium">Tuya Cloud</div>
+                          <div className="text-sm text-muted-foreground">
+                            Use direct power factor readings from Tuya devices (if available)
+                          </div>
+                        </div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="calculated" id="pf-calculated" />
+                      <Label htmlFor="pf-calculated" className="flex-1 cursor-pointer">
+                        <div>
+                          <div className="font-medium">Calculated (from V×A,W)</div>
+                          <div className="text-sm text-muted-foreground">
+                            Calculate power factor using Power ÷ (Voltage × Current)
+                          </div>
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                  
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={handleSavePfSource}
+                      disabled={updateAppSettingsMutation.isPending}
+                      data-testid="button-save-pf-source"
+                    >
+                      {updateAppSettingsMutation.isPending ? (
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      Save Power Factor Source
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Load Devices Button */}
         {devices.length === 0 && !isLoadingDevices && (
           <div className="mb-6">
