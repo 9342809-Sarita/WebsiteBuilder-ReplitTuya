@@ -24,6 +24,7 @@ interface LiveDevice {
   voltageV: number;
   currentA: number;
   pf: number;
+  hasPf?: boolean;
 }
 
 interface LiveDashboardData {
@@ -315,7 +316,10 @@ export default function HomePage() {
                     <PfSourceBadge size="xs" />
                   </div>
                   <span className="text-lg font-bold text-purple-600" data-testid={`pf-${device.deviceId}`}>
-                    {device.online ? device.pf.toFixed(2) : '0.00'}
+                    {device.online ? 
+                      (device.hasPf !== false ? device.pf.toFixed(2) : '—') 
+                      : '0.00'
+                    }
                   </span>
                 </div>
               </CardContent>

@@ -40,6 +40,7 @@ type TailRow = {
   currentA?: number | null;
   pf?: number | null;  // Unified PF field from server
   pfEst?: number | null;  // Legacy fallback field
+  hasPf?: boolean;  // Whether PF data is available
   addEleKwh?: number | null;
 };
 
@@ -461,12 +462,13 @@ export default function MonitorPage() {
                       <td className="py-2 pr-4 font-mono">{row.voltageV ?? "-"}</td>
                       <td className="py-2 pr-4 font-mono">{row.currentA ?? "-"}</td>
                       <td className="py-2 pr-4 font-mono">{
-                        // Prefer unified 'pf' field over legacy 'pfEst'
+                        // Show "—" if hasPf is explicitly false, otherwise prefer unified 'pf' field over legacy 'pfEst'
                         (() => {
+                          if (row.hasPf === false) return "—";
                           const pfValue = row.pf !== null && row.pf !== undefined ? row.pf : row.pfEst;
                           return (pfValue !== null && pfValue !== undefined && typeof pfValue === 'number') 
                             ? pfValue.toFixed(2) 
-                            : "-";
+                            : "—";
                         })()
                       }</td>
                       <td className="py-2 pr-4 font-mono">{row.addEleKwh ?? "-"}</td>

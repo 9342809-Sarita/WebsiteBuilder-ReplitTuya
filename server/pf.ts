@@ -55,7 +55,38 @@ export function clearPfCache(): void {
 }
 
 /**
- * Choose the appropriate PF value based on the source setting
+ * Choose the appropriate PF value based on the source setting with metadata
+ * @param pfSource The configured PF source ("tuya" or "calculated")
+ * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
+ * @param estPf Calculated PF estimate (0..1)
+ * @returns Object with chosen PF value and availability info
+ */
+export function choosePfWithMeta(
+  pfSource: "tuya"|"calculated",
+  tuyaPf?: number | null,   // 0..1 (after scaling)
+  estPf?:  number | null    // 0..1
+): { pf: number | null; hasPf: boolean; source: "tuya" | "calculated" | "none" } {
+  // Try preferred source first
+  if (pfSource === "tuya" && tuyaPf != null) {
+    return { pf: tuyaPf, hasPf: true, source: "tuya" };
+  }
+  
+  // Fallback to calculated if available
+  if (estPf != null) {
+    return { pf: estPf, hasPf: true, source: "calculated" };
+  }
+  
+  // Last resort: try tuya even if not preferred
+  if (tuyaPf != null) {
+    return { pf: tuyaPf, hasPf: true, source: "tuya" };
+  }
+  
+  // No PF available
+  return { pf: null, hasPf: false, source: "none" };
+}
+
+/**
+ * Choose the appropriate PF value based on the source setting (legacy function)
  * @param pfSource The configured PF source ("tuya" or "calculated")
  * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
  * @param estPf Calculated PF estimate (0..1)
@@ -66,13 +97,27 @@ export function choosePf(
   tuyaPf?: number | null,   // 0..1 (after scaling)
   estPf?:  number | null    // 0..1
 ): number | null {
-  if (pfSource === "tuya" && tuyaPf != null) return tuyaPf;
-  if (estPf != null) return estPf;
-  return tuyaPf ?? null; // last fallback
+  return choosePfWithMeta(pfSource, tuyaPf, estPf).pf;
 }
 
 /**
- * Resolve the appropriate PF value using the global setting from database
+ * Resolve the appropriate PF value using the global setting from database with metadata
+ * @param db Prisma client instance
+ * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
+ * @param estPf Calculated PF estimate (0..1)
+ * @returns Promise<object> The resolved PF value with availability info
+ */
+export async function resolvePfWithMeta(
+  db: PrismaClient,
+  tuyaPf?: number|null,
+  estPf?: number|null
+): Promise<{ pf: number | null; hasPf: boolean; source: "tuya" | "calculated" | "none" }> {
+  const src = await getPfSource(db);
+  return choosePfWithMeta(src, tuyaPf, estPf);
+}
+
+/**
+ * Resolve the appropriate PF value using the global setting from database (legacy function)
  * @param db Prisma client instance
  * @param tuyaPf Direct PF reading from Tuya (0..1, after scaling)
  * @param estPf Calculated PF estimate (0..1)
