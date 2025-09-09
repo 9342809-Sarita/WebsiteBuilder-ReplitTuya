@@ -56,3 +56,44 @@ export async function getDeviceHistory(deviceId: string, options?: {
   const res = await apiRequest("GET", url);
   return res.json();
 }
+
+// Energy Chart APIs
+export async function getEnergyTodayHourly(deviceId: string): Promise<any> {
+  const res = await apiRequest("GET", `/api/energy/today-hourly?deviceId=${deviceId}`);
+  return res.json();
+}
+
+export async function getEnergyMonthDaily(deviceId: string, month?: string): Promise<any> {
+  const params = new URLSearchParams({ deviceId });
+  if (month) params.append("month", month);
+  
+  const res = await apiRequest("GET", `/api/energy/month-daily?${params}`);
+  return res.json();
+}
+
+export async function getEnergyYearMonthly(deviceId: string, year?: string): Promise<any> {
+  const params = new URLSearchParams({ deviceId });
+  if (year) params.append("year", year);
+  
+  const res = await apiRequest("GET", `/api/energy/year-monthly?${params}`);
+  return res.json();
+}
+
+export async function getEnergyCalendar(deviceId: string, month?: string): Promise<any> {
+  const params = new URLSearchParams({ deviceId });
+  if (month) params.append("month", month);
+  
+  const res = await apiRequest("GET", `/api/energy/calendar?${params}`);
+  return res.json();
+}
+
+// Power Chart APIs
+export async function getPowerLast24h(deviceId: string): Promise<any> {
+  const res = await apiRequest("GET", `/api/power/last-24h?deviceId=${deviceId}`);
+  return res.json();
+}
+
+export async function getPowerLast7d(deviceId: string): Promise<any> {
+  const res = await apiRequest("GET", `/api/power/last-7d?deviceId=${deviceId}`);
+  return res.json();
+}
