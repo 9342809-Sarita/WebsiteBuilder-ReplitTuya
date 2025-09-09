@@ -69,9 +69,15 @@ export function PageLayout({
           <div className="mb-4 sm:mb-6 flex items-center justify-between">
             <div>
               {subtitle && (
-                <div className="text-sm text-muted-foreground">
-                  {subtitle}
-                </div>
+                typeof subtitle === 'string' ? (
+                  <div className="text-sm text-muted-foreground">
+                    {subtitle}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    {subtitle}
+                  </div>
+                )
               )}
             </div>
             {headerAction && (

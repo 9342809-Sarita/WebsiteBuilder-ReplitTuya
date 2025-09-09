@@ -60,7 +60,7 @@ export default function ChartsPage() {
     } else if (devices && devices.length > 0 && !selectedDeviceId) {
       setSelectedDeviceId(devices[0].deviceId);
     }
-  }, [devices, selectedDeviceId]);
+  }, [devices]); // Removed selectedDeviceId to prevent toggling loop
 
   // Save device selection to localStorage
   useEffect(() => {
