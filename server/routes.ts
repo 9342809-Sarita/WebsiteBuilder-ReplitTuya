@@ -5,6 +5,7 @@ import { insertDeviceSpecSchema, insertDeviceSettingsSchema } from "@shared/sche
 import { handleAsk, getAskHistory, resetAsk } from "./ask";
 import { tuya, baseUrl } from "./tuya";
 import energyRouter from "./routes/energy";
+import powerRouter from "./routes/power";
 import devicesUiRouter from "./routes/devices-ui";
 import monitorRouter from "./routes/monitor";
 import alertsRouter from "./routes/alerts";
@@ -14,6 +15,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount energy API routes
   app.use("/api", energyRouter);
+  
+  // Mount power API routes
+  app.use("/api", powerRouter);
   
   // Mount devices UI API routes
   app.use("/api", devicesUiRouter);

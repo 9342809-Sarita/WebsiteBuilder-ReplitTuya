@@ -312,4 +312,318 @@ router.get("/daily-kwh", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/energy/today-hourly?deviceId=...
+ * Returns hourly kWh consumption for today in IST timezone
+ */
+router.get("/energy/today-hourly", async (req, res) => {
+  try {
+    const { deviceId } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: deviceId" 
+      });
+    }
+
+    // Get today's date in IST timezone
+    const today = new Date();
+    const todayIST = new Date(today.getTime() + (5.5 * 60 * 60 * 1000)); // IST offset
+    const dateStr = todayIST.toISOString().split('T')[0]; // YYYY-MM-DD format
+    
+    // Query 1-hour rollups for today
+    const startOfDay = new Date(dateStr + 'T00:00:00.000Z');
+    const endOfDay = new Date(dateStr + 'T23:59:59.999Z');
+
+    const hourlyData = await prisma.rollup1h.findMany({
+      where: {
+        deviceId: deviceId as string,
+        windowUtc: { 
+          gte: startOfDay, 
+          lte: endOfDay 
+        }
+      },
+      select: { 
+        windowUtc: true, 
+        kwh: true 
+      },
+      orderBy: { windowUtc: 'asc' }
+    });
+
+    if (hourlyData.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        buckets: [],
+        totalKwh: 0
+      });
+    }
+
+    // Create 24-hour buckets (0-23)
+    const buckets = Array.from({ length: 24 }, (_, hour) => {
+      const hourData = hourlyData.find(d => 
+        new Date(d.windowUtc).getUTCHours() === hour
+      );
+      return {
+        hour,
+        kwh: hourData ? Number(hourData.kwh || 0) : 0
+      };
+    });
+
+    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
+
+    res.json({
+      date: dateStr,
+      buckets,
+      totalKwh: Number(totalKwh.toFixed(3)),
+      ok: true
+    });
+
+  } catch (error) {
+    console.error("[ENERGY] Error getting today-hourly data:", error);
+    res.status(500).json({ 
+      error: "Failed to get today-hourly data",
+      detail: String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/energy/month-daily?deviceId=...&month=YYYY-MM
+ * Returns daily kWh consumption for specified month (defaults to current IST month)
+ */
+router.get("/energy/month-daily", async (req, res) => {
+  try {
+    const { deviceId, month } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: deviceId" 
+      });
+    }
+
+    // Default to current month in IST
+    const now = new Date();
+    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const defaultMonth = istNow.toISOString().substr(0, 7); // YYYY-MM
+    const monthStr = (month as string) || defaultMonth;
+
+    // Parse month and create date range
+    const [year, monthNum] = monthStr.split('-').map(Number);
+    const startOfMonth = new Date(year, monthNum - 1, 1);
+    const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59, 999);
+
+    const dailyData = await prisma.dailyKwh.findMany({
+      where: {
+        deviceId: deviceId as string,
+        dayIst: { 
+          gte: startOfMonth, 
+          lte: endOfMonth 
+        }
+      },
+      select: { 
+        dayIst: true, 
+        kwh: true 
+      },
+      orderBy: { dayIst: 'asc' }
+    });
+
+    if (dailyData.length === 0) {
+      return res.json({
+        ok: false,
+        reason: "NO_DATA",
+        buckets: [],
+        totalKwh: 0
+      });
+    }
+
+    // Create buckets for each day of the month
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+    const buckets = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const dayData = dailyData.find(d => 
+        d.dayIst.getDate() === day
+      );
+      return {
+        day,
+        kwh: dayData ? Number(dayData.kwh || 0) : 0
+      };
+    });
+
+    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
+
+    res.json({
+      month: monthStr,
+      buckets,
+      totalKwh: Number(totalKwh.toFixed(3)),
+      ok: true
+    });
+
+  } catch (error) {
+    console.error("[ENERGY] Error getting month-daily data:", error);
+    res.status(500).json({ 
+      error: "Failed to get month-daily data",
+      detail: String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/energy/year-monthly?deviceId=...&year=YYYY
+ * Returns monthly kWh consumption for specified year (defaults to current IST year)
+ */
+router.get("/energy/year-monthly", async (req, res) => {
+  try {
+    const { deviceId, year } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: deviceId" 
+      });
+    }
+
+    // Default to current year in IST
+    const now = new Date();
+    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const yearNum = year ? parseInt(year as string) : istNow.getFullYear();
+
+    // Create date range for the year
+    const startOfYear = new Date(yearNum, 0, 1);
+    const endOfYear = new Date(yearNum, 11, 31, 23, 59, 59, 999);
+
+    const dailyData = await prisma.dailyKwh.findMany({
+      where: {
+        deviceId: deviceId as string,
+        dayIst: { 
+          gte: startOfYear, 
+          lte: endOfYear 
+        }
+      },
+      select: { 
+        dayIst: true, 
+        kwh: true 
+      },
+      orderBy: { dayIst: 'asc' }
+    });
+
+    // Aggregate by month
+    const monthlyTotals: { [month: number]: number } = {};
+    dailyData.forEach(d => {
+      const month = d.dayIst.getMonth() + 1; // 1-12
+      monthlyTotals[month] = (monthlyTotals[month] || 0) + Number(d.kwh || 0);
+    });
+
+    // Create buckets for all 12 months
+    const buckets = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      return {
+        month,
+        kwh: Number((monthlyTotals[month] || 0).toFixed(3))
+      };
+    });
+
+    const totalKwh = buckets.reduce((sum, bucket) => sum + bucket.kwh, 0);
+
+    res.json({
+      year: yearNum,
+      buckets,
+      totalKwh: Number(totalKwh.toFixed(3)),
+      ok: true
+    });
+
+  } catch (error) {
+    console.error("[ENERGY] Error getting year-monthly data:", error);
+    res.status(500).json({ 
+      error: "Failed to get year-monthly data",
+      detail: String(error)
+    });
+  }
+});
+
+/**
+ * GET /api/energy/calendar?deviceId=...&month=YYYY-MM
+ * Returns calendar view of daily kWh consumption with activity levels (0-4)
+ */
+router.get("/energy/calendar", async (req, res) => {
+  try {
+    const { deviceId, month } = req.query;
+
+    if (!deviceId) {
+      return res.status(400).json({ 
+        error: "Missing required parameter: deviceId" 
+      });
+    }
+
+    // Default to current month in IST
+    const now = new Date();
+    const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    const defaultMonth = istNow.toISOString().substr(0, 7); // YYYY-MM
+    const monthStr = (month as string) || defaultMonth;
+
+    // Parse month and create date range
+    const [year, monthNum] = monthStr.split('-').map(Number);
+    const startOfMonth = new Date(year, monthNum - 1, 1);
+    const endOfMonth = new Date(year, monthNum, 0, 23, 59, 59, 999);
+
+    const dailyData = await prisma.dailyKwh.findMany({
+      where: {
+        deviceId: deviceId as string,
+        dayIst: { 
+          gte: startOfMonth, 
+          lte: endOfMonth 
+        }
+      },
+      select: { 
+        dayIst: true, 
+        kwh: true 
+      },
+      orderBy: { dayIst: 'asc' }
+    });
+
+    // Calculate activity levels based on kWh usage
+    const kwhValues = dailyData.map(d => Number(d.kwh || 0)).filter(v => v > 0);
+    const maxKwh = Math.max(...kwhValues, 1); // Avoid division by zero
+
+    // Create days array for calendar view
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+    const days = Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const dayData = dailyData.find(d => d.dayIst.getDate() === day);
+      const kwh = dayData ? Number(dayData.kwh || 0) : 0;
+      
+      // Calculate activity level (0-4 scale)
+      let level = 0;
+      if (kwh > 0) {
+        const ratio = kwh / maxKwh;
+        if (ratio <= 0.2) level = 1;
+        else if (ratio <= 0.4) level = 2;
+        else if (ratio <= 0.7) level = 3;
+        else level = 4;
+      }
+
+      return {
+        day,
+        kwh: Number(kwh.toFixed(3)),
+        level
+      };
+    });
+
+    const totalKwh = days.reduce((sum, day) => sum + day.kwh, 0);
+
+    res.json({
+      month: monthStr,
+      days,
+      totalKwh: Number(totalKwh.toFixed(3)),
+      ok: true
+    });
+
+  } catch (error) {
+    console.error("[ENERGY] Error getting calendar data:", error);
+    res.status(500).json({ 
+      error: "Failed to get calendar data",
+      detail: String(error)
+    });
+  }
+});
+
 export default router;
