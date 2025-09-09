@@ -1,11 +1,14 @@
 import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import { PrismaClient } from "@prisma/client";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startPollers } from "./jobs/poller";
 import { startRollupScheduler } from "./jobs/rollups";
 import { startRetentionScheduler } from "./jobs/retention";
+
+const prisma = new PrismaClient();
 
 const app = express();
 
@@ -57,6 +60,22 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+  
+  // Seed default AppSettings if missing
+  try {
+    const existingSettings = await prisma.appSettings.findFirst();
+    if (!existingSettings) {
+      await prisma.appSettings.create({
+        data: {
+          id: 1,
+          pfSource: "calculated"
+        }
+      });
+      console.log("[SEED] Created default AppSettings: pfSource = calculated");
+    }
+  } catch (error) {
+    console.error("[SEED] Failed to seed AppSettings:", error);
+  }
   
   // Start background pollers for data ingestion
   startPollers();

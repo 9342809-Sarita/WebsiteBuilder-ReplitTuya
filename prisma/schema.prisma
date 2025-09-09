@@ -149,3 +149,11 @@ model PushSubscription {
   createdAt  DateTime @default(now())
   userHint   String?   // optional: "Mukesh's Pixel 7", etc.
 }
+
+model AppSettings {
+  id        Int      @id @default(1)
+  pfSource  String   @db.VarChar(16) // "tuya" | "calculated"
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
