@@ -46,21 +46,29 @@ export default function ChartsPage() {
   const allDevices: Device[] = (devicesData as any)?.devices || [];
   const deviceSettings = (deviceSettingsData as any)?.result || [];
 
-  // Filter devices to only show those with data storage enabled
-  const devices: Device[] = allDevices.filter(device => {
-    const settings = deviceSettings.find((s: any) => s.deviceId === device.deviceId);
-    return settings?.dataStorageEnabled ?? true;
-  });
+  // Filter devices to only show those with data storage enabled (memoized to prevent re-creation)
+  const devices: Device[] = useMemo(() => {
+    return allDevices.filter(device => {
+      const settings = deviceSettings.find((s: any) => s.deviceId === device.deviceId);
+      return settings?.dataStorageEnabled ?? true;
+    });
+  }, [allDevices, deviceSettings]);
 
-  // Load stored device ID from localStorage on mount
+  // Load stored device ID from localStorage on mount (runs only once when devices first load)
   useEffect(() => {
+    if (devices.length === 0) return; // Wait for devices to load
+    
     const storedDeviceId = localStorage.getItem('selectedDeviceId');
-    if (storedDeviceId && devices?.find((d: Device) => d.deviceId === storedDeviceId)) {
-      setSelectedDeviceId(storedDeviceId);
-    } else if (devices && devices.length > 0 && !selectedDeviceId) {
+    if (storedDeviceId && devices.find((d: Device) => d.deviceId === storedDeviceId)) {
+      // Only set if it's not already the selected device
+      if (selectedDeviceId !== storedDeviceId) {
+        setSelectedDeviceId(storedDeviceId);
+      }
+    } else if (!selectedDeviceId && devices.length > 0) {
+      // Only set first device if no device is currently selected
       setSelectedDeviceId(devices[0].deviceId);
     }
-  }, [devices]); // Removed selectedDeviceId to prevent toggling loop
+  }, [devices, selectedDeviceId]); // Include selectedDeviceId but with conditions to prevent loops
 
   // Save device selection to localStorage
   useEffect(() => {
