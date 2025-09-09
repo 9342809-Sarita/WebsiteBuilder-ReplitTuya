@@ -52,12 +52,22 @@ export default function ChartsPage() {
     return settings?.dataStorageEnabled ?? true;
   });
 
-  // Auto-select first device if none selected
+  // Load stored device ID from localStorage on mount
   useEffect(() => {
-    if (!selectedDeviceId && devices.length > 0) {
+    const storedDeviceId = localStorage.getItem('selectedDeviceId');
+    if (storedDeviceId && devices?.find((d: Device) => d.deviceId === storedDeviceId)) {
+      setSelectedDeviceId(storedDeviceId);
+    } else if (devices && devices.length > 0 && !selectedDeviceId) {
       setSelectedDeviceId(devices[0].deviceId);
     }
   }, [devices, selectedDeviceId]);
+
+  // Save device selection to localStorage
+  useEffect(() => {
+    if (selectedDeviceId) {
+      localStorage.setItem('selectedDeviceId', selectedDeviceId);
+    }
+  }, [selectedDeviceId]);
 
   // Chart data queries
   const { data: todayHourlyData, isLoading: todayHourlyLoading } = useQuery({
@@ -392,7 +402,9 @@ export default function ChartsPage() {
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">
-                                Total: <Badge variant="outline">{monthDailyData.totalKwh} kWh</Badge>
+                                Total: <Badge variant="outline">
+                                  {monthDailyData.buckets?.reduce((sum: number, bucket: any) => sum + bucket.kwh, 0).toFixed(2)} kWh
+                                </Badge>
                               </span>
                             </div>
                             <div className="h-64">
@@ -429,7 +441,9 @@ export default function ChartsPage() {
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
                               <span className="text-sm text-muted-foreground">
-                                Total: <Badge variant="outline">{yearMonthlyData.totalKwh} kWh</Badge>
+                                Total: <Badge variant="outline">
+                                  {yearMonthlyData.buckets?.reduce((sum: number, bucket: any) => sum + bucket.kwh, 0).toFixed(2)} kWh
+                                </Badge>
                               </span>
                             </div>
                             <div className="h-64">
@@ -516,7 +530,10 @@ export default function ChartsPage() {
                               <CartesianGrid strokeDasharray="3 3" />
                               <XAxis dataKey="time" />
                               <YAxis />
-                              <Tooltip formatter={(value) => [`${value} W`, 'Power']} />
+                              <Tooltip 
+                                formatter={(value, name) => [`${value} W`, 'Power']}
+                                labelFormatter={(label) => `Time: ${label}`}
+                              />
                               <Line type="monotone" dataKey="power" stroke="#8884d8" strokeWidth={1} dot={false} />
                             </LineChart>
                           </ResponsiveContainer>
