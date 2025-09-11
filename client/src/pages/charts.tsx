@@ -11,6 +11,7 @@ import { PageLayout } from "@/components/page-layout";
 import { CalendarKwh } from "@/components/CalendarKwh";
 import { NoDataAlert } from "@/components/NoDataAlert";
 import { Link } from "wouter";
+import DebugPanel from "../components/DebugPanel";
 import { 
   getEnergyTodayHourly, 
   getEnergyMonthDaily, 
@@ -329,6 +330,8 @@ export default function ChartsPage() {
             )}
           </CardContent>
         </Card>
+
+        {selectedDeviceId && <DebugPanel deviceId={selectedDeviceId} />}
 
         {/* Charts */}
         {selectedDeviceId ? (
