@@ -107,16 +107,16 @@ export default function DebugPanel({ deviceId }: Props) {
               <table className="text-sm w-full">
                 <tbody>
                   <tr><td className="pr-3">Time</td><td>{data.db?.health?.ts || "—"}</td></tr>
-                  <tr><td>Voltage</td><td><code className="font-mono tabular-nums">{data.db?.health?.voltageV ?? "—"}</code> V</td></tr>
-                  <tr><td>Current</td><td><code className="font-mono tabular-nums">{data.db?.health?.currentA ?? "—"}</code> A</td></tr>
-                  <tr><td>Power</td><td><code className="font-mono tabular-nums">{W_meas ?? "—"}</code> W</td></tr>
+                  <tr><td>Voltage</td><td><code className="font-mono tabular-nums">{data.db?.health?.voltageV ? data.db.health.voltageV.toFixed(2) : "—"}</code> V</td></tr>
+                  <tr><td>Current</td><td><code className="font-mono tabular-nums">{data.db?.health?.currentA ? data.db.health.currentA.toFixed(2) : "—"}</code> A</td></tr>
+                  <tr><td>Power</td><td><code className="font-mono tabular-nums">{W_meas ? W_meas.toFixed(2) : "—"}</code> W</td></tr>
                   <tr><td>PF (resolved)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfResolved ? data.db.health.pfResolved.toFixed(2) : "—"}</code></td></tr>
                   <tr><td>PF (tuya)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfTuya ? data.db.health.pfTuya.toFixed(2) : "—"}</code></td></tr>
                   <tr><td>PF (estimated)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfEst ? data.db.health.pfEst.toFixed(2) : "—"}</code></td></tr>
                   <tr><td className="pt-2">Sanity W ≈ V·A·PF</td>
                       <td className="pt-2">
                         <div className="flex items-center">
-                          <span><code className="font-mono tabular-nums">{W_est ?? "—"}</code> W</span>
+                          <span><code className="font-mono tabular-nums">{W_est ? W_est.toFixed(2) : "—"}</code> W</span>
                           <DiffBadge diff={diff} />
                         </div>
                       </td></tr>
@@ -131,7 +131,7 @@ export default function DebugPanel({ deviceId }: Props) {
               <table className="text-sm w-full">
                 <tbody>
                   <tr><td className="pr-3">Time</td><td>{data.db.energy.ts}</td></tr>
-                  <tr><td>addEleKwh</td><td><code className="font-mono tabular-nums">{data.db.energy.addEleKwh}</code> kWh</td></tr>
+                  <tr><td>addEleKwh</td><td><code className="font-mono tabular-nums">{data.db.energy.addEleKwh.toFixed(2)}</code> kWh</td></tr>
                 </tbody>
               </table>
             ) : <div className="text-sm opacity-60">No energy row</div>}

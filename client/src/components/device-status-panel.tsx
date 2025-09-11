@@ -223,16 +223,16 @@ export function DeviceStatusPanel({
       
       // Specific electrical measurement fields
       if (code === "cur_current") {
-        return `${(value / 1000).toFixed(3)} A`; // Convert mA to A
+        return `${(value / 1000).toFixed(2)} A`; // Convert mA to A
       }
       if (code === "cur_power") {
-        return `${(value / 10).toFixed(1)} W`; // Convert 0.1W units to W
+        return `${(value / 10).toFixed(2)} W`; // Convert 0.1W units to W
       }
       if (code === "cur_voltage") {
-        return `${(value / 10).toFixed(1)} V`; // Convert 0.1V units to V
+        return `${(value / 10).toFixed(2)} V`; // Convert 0.1V units to V
       }
       if (code === "add_ele") {
-        return `${(value / 1000).toFixed(3)} kWh`; // Convert Wh to kWh
+        return `${(value / 1000).toFixed(2)} kWh`; // Convert Wh to kWh
       }
       if (code === "power_factor") {
         return `${(value / 1000).toFixed(2)}`; // Convert to decimal and format to 2 places

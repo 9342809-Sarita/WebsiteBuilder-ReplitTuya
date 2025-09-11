@@ -282,7 +282,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Power</span>
                   </div>
                   <span className="text-lg font-bold text-yellow-600" data-testid={`power-${device.deviceId}`}>
-                    {device.online ? device.powerW.toFixed(1) : '0.0'} W
+                    {device.online ? device.powerW.toFixed(2) : '0.00'} W
                   </span>
                 </div>
 
@@ -293,7 +293,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Voltage</span>
                   </div>
                   <span className="text-lg font-bold text-blue-600" data-testid={`voltage-${device.deviceId}`}>
-                    {device.online ? device.voltageV.toFixed(1) : '0.0'} V
+                    {device.online ? device.voltageV.toFixed(2) : '0.00'} V
                   </span>
                 </div>
 
@@ -304,7 +304,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Current</span>
                   </div>
                   <span className="text-lg font-bold text-orange-600" data-testid={`current-${device.deviceId}`}>
-                    {device.online ? device.currentA.toFixed(3) : '0.000'} A
+                    {device.online ? device.currentA.toFixed(2) : '0.00'} A
                   </span>
                 </div>
 

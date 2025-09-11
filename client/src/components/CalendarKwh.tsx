@@ -97,12 +97,12 @@ export function CalendarKwh({ month, days }: CalendarKwhProps) {
                         >
                           <div className="font-medium">{day.day}</div>
                           <div className="text-[10px] opacity-80">
-                            {day.kwh.toFixed(1)}
+                            {day.kwh.toFixed(2)}
                           </div>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>{formatTooltipDate(day.day, month)}: {day.kwh.toFixed(3)} kWh</p>
+                        <p>{formatTooltipDate(day.day, month)}: {day.kwh.toFixed(2)} kWh</p>
                       </TooltipContent>
                     </Tooltip>
                   ) : (
