@@ -234,6 +234,9 @@ export function DeviceStatusPanel({
       if (code === "add_ele") {
         return `${(value / 1000).toFixed(3)} kWh`; // Convert Wh to kWh
       }
+      if (code === "power_factor") {
+        return `${(value / 1000).toFixed(2)}`; // Convert to decimal and format to 2 places
+      }
       
       // Generic handling for similar fields
       if (codeStr.includes("temp")) return `${value}°C`;

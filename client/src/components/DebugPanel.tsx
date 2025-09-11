@@ -110,9 +110,9 @@ export default function DebugPanel({ deviceId }: Props) {
                   <tr><td>Voltage</td><td><code className="font-mono tabular-nums">{data.db?.health?.voltageV ?? "—"}</code> V</td></tr>
                   <tr><td>Current</td><td><code className="font-mono tabular-nums">{data.db?.health?.currentA ?? "—"}</code> A</td></tr>
                   <tr><td>Power</td><td><code className="font-mono tabular-nums">{W_meas ?? "—"}</code> W</td></tr>
-                  <tr><td>PF (resolved)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfResolved ?? "—"}</code></td></tr>
-                  <tr><td>PF (tuya)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfTuya ?? "—"}</code></td></tr>
-                  <tr><td>PF (estimated)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfEst ?? "—"}</code></td></tr>
+                  <tr><td>PF (resolved)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfResolved ? data.db.health.pfResolved.toFixed(2) : "—"}</code></td></tr>
+                  <tr><td>PF (tuya)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfTuya ? data.db.health.pfTuya.toFixed(2) : "—"}</code></td></tr>
+                  <tr><td>PF (estimated)</td><td><code className="font-mono tabular-nums">{data.db?.health?.pfEst ? data.db.health.pfEst.toFixed(2) : "—"}</code></td></tr>
                   <tr><td className="pt-2">Sanity W ≈ V·A·PF</td>
                       <td className="pt-2">
                         <div className="flex items-center">
