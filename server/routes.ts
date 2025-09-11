@@ -13,6 +13,7 @@ import monitorRouter from "./routes/monitor";
 import alertsRouter from "./routes/alerts";
 import pushRouter from "./routes/push";
 import appSettingsRouter from "./routes/app-settings";
+import debugRouter from "./routes/debug";
 
 const prisma = new PrismaClient();
 
@@ -38,6 +39,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount app settings API routes
   app.use("/api", appSettingsRouter);
+  
+  // Mount debug API routes
+  app.use("/api/debug", debugRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
