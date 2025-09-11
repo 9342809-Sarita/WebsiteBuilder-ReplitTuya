@@ -109,3 +109,10 @@ export async function setAppSettings(pfSource: "tuya" | "calculated"): Promise<{
   const res = await apiRequest("POST", "/api/app-settings", { pfSource });
   return res.json();
 }
+
+export async function getDebugLastSample(deviceId: string, live = false) {
+  const url = `/api/debug/last-sample?deviceId=${encodeURIComponent(deviceId)}&live=${live ? "1" : "0"}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Failed to fetch debug sample");
+  return res.json();
+}
