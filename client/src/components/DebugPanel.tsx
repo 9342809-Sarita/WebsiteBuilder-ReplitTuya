@@ -9,6 +9,17 @@ export default function DebugPanel({ deviceId }: Props) {
   const [live, setLive] = useState(false);
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState<null | "all" | "live">(null);
+  
+  // helper
+  async function copyText(t: string) {
+    try {
+      await navigator.clipboard.writeText(t);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async function refresh() {
     if (!deviceId) return;
@@ -26,6 +37,19 @@ export default function DebugPanel({ deviceId }: Props) {
   function percentDiff(a?: number|null, b?: number|null) {
     if (a==null || b==null || a===0) return null;
     return Math.round(((b - a) / a) * 100);
+  }
+
+  function DiffBadge({ diff }: { diff: number | null }) {
+    if (diff == null) return <span className="text-xs opacity-60">—</span>;
+    const abs = Math.abs(diff);
+    let cls = "bg-green-100 text-green-700";
+    if (abs > 5 && abs <= 15) cls = "bg-yellow-100 text-yellow-800";
+    if (abs > 15) cls = "bg-red-100 text-red-700";
+    return (
+      <span className={`ml-2 rounded px-1.5 py-0.5 text-xs font-medium ${cls}`}>
+        {abs}% diff
+      </span>
+    );
   }
 
   // quick check: W_est = V * A * PF
@@ -52,6 +76,20 @@ export default function DebugPanel({ deviceId }: Props) {
           <button className="px-2 py-1 border rounded" onClick={refresh} disabled={!deviceId || loading}>
             {loading ? "Loading..." : "Refresh"}
           </button>
+          <button
+            className="px-2 py-1 border rounded"
+            onClick={async () => {
+              if (!data) return;
+              const ok = await copyText(JSON.stringify(data, null, 2));
+              setCopied(ok ? "all" : null);
+              setTimeout(() => setCopied(null), 1200);
+            }}
+            disabled={!data || loading}
+            title="Copy combined DB+Live JSON"
+          >
+            Copy JSON
+          </button>
+          {copied && <span className="text-xs opacity-70 ml-2">Copied!</span>}
           <button className="px-2 py-1 border rounded" onClick={() => setOpen(o => !o)}>
             {open ? "Hide" : "Show"}
           </button>
@@ -76,7 +114,12 @@ export default function DebugPanel({ deviceId }: Props) {
                   <tr><td>PF (tuya)</td><td>{data.db?.health?.pfTuya ?? "—"}</td></tr>
                   <tr><td>PF (estimated)</td><td>{data.db?.health?.pfEst ?? "—"}</td></tr>
                   <tr><td className="pt-2">Sanity W ≈ V·A·PF</td>
-                      <td className="pt-2">{W_est ?? "—"} W {diff!=null ? `(${diff}% vs measured)` : ""}</td></tr>
+                      <td className="pt-2">
+                        <div className="flex items-center">
+                          <span>{W_est ?? "—"} W</span>
+                          <DiffBadge diff={diff} />
+                        </div>
+                      </td></tr>
                 </tbody>
               </table>
             )}
@@ -100,9 +143,27 @@ export default function DebugPanel({ deviceId }: Props) {
               {data?.live?.error ? (
                 <div className="text-red-600 text-sm">Fetch failed</div>
               ) : (
-                <pre className="text-xs overflow-auto max-h-64 bg-gray-50 p-2 rounded">
-                  {JSON.stringify(data?.live, null, 2)}
-                </pre>
+                <>
+                  <div className="mb-2 flex items-center gap-2">
+                    <button
+                      className="px-2 py-1 border rounded"
+                      onClick={async () => {
+                        const liveBlob = JSON.stringify(data?.live ?? {}, null, 2);
+                        const ok = await copyText(liveBlob);
+                        setCopied(ok ? "live" : null);
+                        setTimeout(() => setCopied(null), 1200);
+                      }}
+                      disabled={!data?.live}
+                      title="Copy only the Live Tuya JSON"
+                    >
+                      Copy Live JSON
+                    </button>
+                    {copied === "live" && <span className="text-xs opacity-70">Copied!</span>}
+                  </div>
+                  <pre className="text-xs overflow-auto max-h-64 bg-gray-50 p-2 rounded">
+                    {JSON.stringify(data?.live, null, 2)}
+                  </pre>
+                </>
               )}
             </div>
           )}
