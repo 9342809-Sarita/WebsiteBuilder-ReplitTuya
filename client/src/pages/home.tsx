@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +43,17 @@ type FilterType = 'total' | 'online' | 'offline';
 export default function HomePage() {
   // Filter state - default to "online" as requested
   const [deviceFilter, setDeviceFilter] = useState<FilterType>('online');
+  // Dynamic refresh interval from poller settings
+  const [refreshMs, setRefreshMs] = useState<number>(10000);
+
+  // Fetch dashboard refresh interval from poller settings
+  useEffect(() => {
+    fetch("/api/pollers/settings")
+      .then(r => r.json())
+      .then(s => setRefreshMs(s.dashboardRefreshMs ?? 10000))
+      .catch(() => setRefreshMs(10000));
+  }, []);
+
   // Live dashboard data query
   const { 
     data: dashboardData, 
@@ -51,7 +62,7 @@ export default function HomePage() {
     refetch 
   } = useQuery<LiveDashboardData>({
     queryKey: ["/api/live-dashboard"],
-    refetchInterval: 10000, // Refresh every 10 seconds for live data
+    refetchInterval: refreshMs, // Dynamic refresh interval from poller settings
   });
 
   const summary = dashboardData?.summary || {
