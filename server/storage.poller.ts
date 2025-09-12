@@ -7,7 +7,9 @@ export type PollerSettings = {
   energyIntervalMs: number;
   healthEnabled: boolean;
   healthIntervalMs: number;
+  dashboardRefreshEnabled: boolean;
   dashboardRefreshMs: number;
+  masterKillSwitch: boolean;
 };
 
 const SINGLETON_ID = "singleton";
@@ -30,7 +32,9 @@ export async function getPollerSettings(): Promise<PollerSettings> {
     energyIntervalMs: row.energyIntervalMs,
     healthEnabled: !!row.healthEnabled,
     healthIntervalMs: row.healthIntervalMs,
+    dashboardRefreshEnabled: !!row.dashboardRefreshEnabled,
     dashboardRefreshMs: row.dashboardRefreshMs,
+    masterKillSwitch: !!row.masterKillSwitch,
   };
 }
 
