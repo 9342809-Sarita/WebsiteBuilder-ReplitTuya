@@ -43,16 +43,29 @@ type FilterType = 'total' | 'online' | 'offline';
 export default function HomePage() {
   // Filter state - default to "online" as requested
   const [deviceFilter, setDeviceFilter] = useState<FilterType>('online');
-  // Dynamic refresh interval from poller settings
+  // Dynamic refresh interval and enabled flags from poller settings
   const [refreshMs, setRefreshMs] = useState<number>(10000);
+  const [dashboardEnabled, setDashboardEnabled] = useState<boolean>(true);
+  const [masterKillSwitch, setMasterKillSwitch] = useState<boolean>(false);
 
-  // Fetch dashboard refresh interval from poller settings
+  // Fetch dashboard settings from poller settings
   useEffect(() => {
     fetch("/api/pollers/settings")
       .then(r => r.json())
-      .then(s => setRefreshMs(s.dashboardRefreshMs ?? 10000))
-      .catch(() => setRefreshMs(10000));
+      .then(s => {
+        setRefreshMs(s.dashboardRefreshMs ?? 10000);
+        setDashboardEnabled(s.dashboardRefreshEnabled ?? true);
+        setMasterKillSwitch(s.masterKillSwitch ?? false);
+      })
+      .catch(() => {
+        setRefreshMs(10000);
+        setDashboardEnabled(true);
+        setMasterKillSwitch(false);
+      });
   }, []);
+
+  // Check if dashboard should be enabled (not killed by master switch or dashboard disabled)
+  const isDashboardEnabled = dashboardEnabled && !masterKillSwitch;
 
   // Live dashboard data query
   const { 
@@ -62,7 +75,8 @@ export default function HomePage() {
     refetch 
   } = useQuery<LiveDashboardData>({
     queryKey: ["/api/live-dashboard"],
-    refetchInterval: refreshMs, // Dynamic refresh interval from poller settings
+    refetchInterval: isDashboardEnabled ? refreshMs : false, // Dynamic refresh interval from poller settings
+    enabled: isDashboardEnabled, // Disable query if dashboard is disabled or master kill switch is on
   });
 
   const summary = dashboardData?.summary || {

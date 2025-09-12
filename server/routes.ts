@@ -15,6 +15,7 @@ import pushRouter from "./routes/push";
 import appSettingsRouter from "./routes/app-settings";
 import debugRouter from "./routes/debug";
 import { pollerRouter } from "./routes/pollers";
+import { getPollerSettings } from "./storage.poller";
 
 const prisma = new PrismaClient();
 
@@ -99,6 +100,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Live dashboard data (devices + status for online devices)
   app.get("/api/live-dashboard", async (req, res) => {
     try {
+      // Check master kill switch first
+      const pollerSettings = await getPollerSettings();
+      if (pollerSettings.masterKillSwitch) {
+        // Return empty response when master kill switch is enabled
+        res.json({
+          success: true,
+          summary: {
+            totalDevices: 0,
+            onlineDevices: 0,
+            offlineDevices: 0
+          },
+          devices: [],
+          timestamp: new Date().toISOString(),
+          masterKillSwitchEnabled: true
+        });
+        return;
+      }
+
       // First get device list
       const devicesResp = await tuya.request({
         path: "/v1.0/iot-01/associated-users/devices",
