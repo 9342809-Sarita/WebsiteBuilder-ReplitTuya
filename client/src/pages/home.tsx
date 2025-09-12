@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLayout } from "@/components/page-layout";
 import { PfSourceBadge } from "@/components/pf-source-badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   Cpu, 
   CheckCircle, 
@@ -43,6 +45,8 @@ type FilterType = 'total' | 'online' | 'offline';
 export default function HomePage() {
   // Filter state - default to "online" as requested
   const [deviceFilter, setDeviceFilter] = useState<FilterType>('online');
+  const { toast } = useToast();
+  
   // Live dashboard data query
   const { 
     data: dashboardData, 
@@ -52,6 +56,34 @@ export default function HomePage() {
   } = useQuery<LiveDashboardData>({
     queryKey: ["/api/live-dashboard"],
     refetchInterval: 10000, // Refresh every 10 seconds for live data
+  });
+
+  // Cloud refresh mutation
+  const cloudRefreshMutation = useMutation({
+    mutationFn: () => apiRequest("/api/refresh-from-cloud", "POST"),
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast({
+          title: "Cloud refresh successful",
+          description: data.message,
+        });
+        // Invalidate and refetch dashboard data
+        queryClient.invalidateQueries({ queryKey: ["/api/live-dashboard"] });
+      } else {
+        toast({
+          title: "Cloud refresh failed",
+          description: data.details || data.error,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Cloud refresh failed", 
+        description: error?.message || "Failed to refresh data from Tuya cloud",
+        variant: "destructive",
+      });
+    }
   });
 
   const summary = dashboardData?.summary || {
@@ -112,6 +144,34 @@ export default function HomePage() {
       title="Dashboard"
       subtitle="Live device monitoring with real-time Tuya data"
     >
+      {/* Refresh Controls */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <Button 
+          onClick={handleRefresh} 
+          variant="outline" 
+          disabled={isLoading}
+          data-testid="button-refresh-dashboard"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh Dashboard
+        </Button>
+        <Button 
+          onClick={() => cloudRefreshMutation.mutate()} 
+          variant="default"
+          disabled={cloudRefreshMutation.isPending}
+          data-testid="button-refresh-cloud"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${cloudRefreshMutation.isPending ? 'animate-spin' : ''}`} />
+          {cloudRefreshMutation.isPending ? 'Refreshing from Cloud...' : 'Refresh from Tuya Cloud'}
+        </Button>
+        {summary.totalDevices === 0 && (
+          <div className="flex items-center text-amber-600 text-sm">
+            <XCircle className="mr-2 h-4 w-4" />
+            No devices found - try refreshing from cloud
+          </div>
+        )}
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
         <Card 

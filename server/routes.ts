@@ -72,6 +72,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Refresh data from Tuya cloud with diagnostics
+  app.post("/api/refresh-from-cloud", async (req, res) => {
+    try {
+      // Check if credentials are available
+      const accessKey = process.env.TUYA_ACCESS_ID;
+      const secretKey = process.env.TUYA_ACCESS_SECRET;
+      
+      if (!accessKey || !secretKey) {
+        return res.status(400).json({
+          success: false,
+          error: "Tuya credentials missing",
+          details: "Please set TUYA_ACCESS_ID and TUYA_ACCESS_SECRET environment variables",
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      console.log("[REFRESH] Starting cloud data refresh...");
+      
+      // Try to fetch devices from Tuya cloud
+      const devicesResp = await tuya.request({
+        path: "/v1.0/iot-01/associated-users/devices",
+        method: "GET",
+        query: { page_no: 1, page_size: 100 }
+      });
+
+      // Check if response indicates quota exhaustion or other API issues
+      const respData = devicesResp as any;
+      if (!respData.success && respData.code) {
+        let errorMessage = respData.msg || "Unknown Tuya API error";
+        let suggestion = "";
+        
+        if (respData.code === 28841004) {
+          suggestion = "Your Tuya Trial Edition quota is exhausted. Please upgrade to the official version in your Tuya IoT Cloud Platform account.";
+        } else if (respData.code === 1106) {
+          suggestion = "Invalid credentials. Please check your TUYA_ACCESS_ID and TUYA_ACCESS_SECRET.";
+        } else if (respData.code === 1004) {
+          suggestion = "Invalid signature. Please check your TUYA_ACCESS_SECRET and ensure your system time is correct.";
+        }
+
+        return res.status(400).json({
+          success: false,
+          error: "Tuya API Error",
+          details: errorMessage,
+          suggestion,
+          code: respData.code,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      const deviceList = respData?.result?.devices ?? [];
+      const totalDevices = deviceList.length;
+      const onlineDevices = deviceList.filter((d: any) => d.online).length;
+
+      console.log(`[REFRESH] Found ${totalDevices} devices (${onlineDevices} online)`);
+
+      // If we have a fullReset flag, we could clear database here
+      // For now, just return the current state
+      
+      res.json({
+        success: true,
+        totalDevices,
+        onlineDevices,
+        offlineDevices: totalDevices - onlineDevices,
+        message: totalDevices > 0 ? "Successfully refreshed device data from Tuya cloud" : "Connected to Tuya cloud but no devices found. Make sure your Smart Life app account is linked to your IoT Cloud project.",
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (err: any) {
+      console.error("[REFRESH] Error refreshing from cloud:", err?.response ?? err);
+      
+      // Try to provide helpful error messages based on common issues
+      let suggestion = "";
+      if (err?.response?.status === 401) {
+        suggestion = "Authentication failed. Please check your Tuya credentials.";
+      } else if (err?.response?.status === 403) {
+        suggestion = "Access forbidden. Your Tuya project may not have the required permissions.";
+      } else if (err?.code === 'ENOTFOUND' || err?.code === 'ECONNREFUSED') {
+        suggestion = "Network connection failed. Please check your TUYA_ENDPOINT setting.";
+      }
+
+      res.status(500).json({
+        success: false,
+        error: "Failed to refresh from cloud",
+        details: err?.message || String(err),
+        suggestion,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   // Current device status
   app.get("/api/devices/:id/status", async (req, res) => {
     try {
