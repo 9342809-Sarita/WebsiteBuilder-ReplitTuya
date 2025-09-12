@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageLayout } from "@/components/page-layout";
+import TuyaCounter from "../components/TuyaCounter";
 import { PfSourceBadge } from "@/components/pf-source-badge";
 import { 
   Cpu, 
@@ -158,7 +159,7 @@ export default function HomePage() {
       subtitle="Live device monitoring with real-time Tuya data"
     >
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
         <Card 
           className={`shadow-sm cursor-pointer transition-all hover:shadow-md ${
             deviceFilter === 'total' ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-muted/50'
@@ -227,6 +228,9 @@ export default function HomePage() {
             </p>
           </CardContent>
         </Card>
+
+        {/* Tuya API Counter */}
+        <TuyaCounter refreshMs={5000} />
       </div>
 
       {/* Refresh Control */}
