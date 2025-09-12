@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import HomePage from "@/pages/home";
 import SettingsPage from "@/pages/settings";
+import DeviceSettingsPage from "@/pages/device-settings";
 import RawDataPage from "@/pages/raw-data";
 import AskPage from "@/pages/ask";
 import ChartsPage from "@/pages/charts";
@@ -17,6 +18,7 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/settings/devices" component={DeviceSettingsPage} />
       <Route path="/settings/raw-data" component={RawDataPage} />
       <Route path="/ask" component={AskPage} />
       <Route path="/charts" component={ChartsPage} />

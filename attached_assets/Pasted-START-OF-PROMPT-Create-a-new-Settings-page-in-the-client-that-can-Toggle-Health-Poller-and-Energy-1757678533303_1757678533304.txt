@@ -1,3 +1,19 @@
+START OF PROMPT
+
+Create a new Settings page in the client that can:
+
+Toggle Health Poller and Energy Poller
+
+Edit intervals (in seconds or minutes, but store/send ms)
+
+Edit Live Dashboard refresh interval
+
+If a poller is disabled, show a “Ping now” button to manually pull once
+
+Use React + fetch (or React Query if it’s present). Add a route /settings.
+
+client/src/pages/Settings.tsx:
+
 import React from "react";
 
 type PollerSettings = {
@@ -160,3 +176,13 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+
+Add a route to your SPA/router (e.g., client/src/App.tsx):
+
+// add <Route path="/settings" element={<SettingsPage />} />
+
+
+Add a link in your header/nav to /settings.
+
+END OF PROMPT

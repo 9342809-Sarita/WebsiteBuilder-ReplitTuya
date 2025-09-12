@@ -17,7 +17,8 @@ const navigationItems: NavigationItem[] = [
   { href: "/monitor", label: "Monitor", icon: Monitor, testId: "nav-monitor" },
   { href: "/alerts", label: "Alerts", icon: Bell, testId: "nav-alerts" },
   { href: "/ask", label: "AI CHAT", icon: MessageSquare, testId: "nav-ask" },
-  { href: "/settings", label: "Settings", icon: Settings, testId: "nav-settings" },
+  { href: "/settings", label: "Poller Settings", icon: Settings, testId: "nav-settings" },
+  { href: "/settings/devices", label: "Device Settings", icon: Database, testId: "nav-device-settings" },
   { href: "/settings/raw-data", label: "Raw Data", icon: Database, testId: "nav-raw-data" },
 ];
 
