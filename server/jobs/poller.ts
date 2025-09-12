@@ -4,17 +4,14 @@ import { normalizeFromStatus, type TuyaStatus } from "../normalize";
 import { detectAnomalies } from "../logic/anomaly";
 import { storage } from "../storage";
 import { evaluateAlertsForDevice } from "../alerts";
+import { getPollerSettings } from "../storage.poller";
 
 const prisma = new PrismaClient();
 
-// Polling intervals
-const POLL_ENERGY_MS = Number(process.env.POLL_ENERGY_MS) || 300000; // 5 minutes
-const POLL_HEALTH_MS = Number(process.env.POLL_HEALTH_MS) || 30000;  // 30 seconds
+let energyTimer: NodeJS.Timeout | null = null;
+let healthTimer: NodeJS.Timeout | null = null;
 
-/**
- * Energy polling tick: Updates device info and logs energy consumption data
- */
-async function energyTick() {
+export async function energyTickOnce(): Promise<{ ok: boolean; devices: number }> {
   try {
     console.log("[ENERGY] Starting energy tick...");
     
@@ -75,15 +72,14 @@ async function energyTick() {
     }
     
     console.log("[ENERGY] Energy tick completed");
+    return { ok: true, devices: devices.length };
   } catch (error) {
     console.error("[ENERGY] Error in energy tick:", error);
+    return { ok: false, devices: 0 };
   }
 }
 
-/**
- * Health polling tick: Updates device health metrics
- */
-async function healthTick() {
+export async function healthTickOnce(): Promise<{ ok: boolean; devices: number }> {
   try {
     console.log("[HEALTH] Starting health tick...");
     
@@ -166,24 +162,46 @@ async function healthTick() {
     }
     
     console.log("[HEALTH] Health tick completed");
+    return { ok: true, devices: devices.length };
   } catch (error) {
     console.error("[HEALTH] Error in health tick:", error);
+    return { ok: false, devices: 0 };
   }
 }
 
-/**
- * Start both polling intervals
- */
-export function startPollers() {
-  console.log(`[POLLER] Starting pollers - Energy: ${POLL_ENERGY_MS}ms, Health: ${POLL_HEALTH_MS}ms`);
+async function scheduleEnergy() {
+  const s = await getPollerSettings();
+  if (!s.energyEnabled) {
+    if (energyTimer) { clearTimeout(energyTimer); energyTimer = null; }
+    return; // no schedule while disabled
+  }
+  if (energyTimer) clearTimeout(energyTimer);
+  energyTimer = setTimeout(async () => {
+    try { await energyTickOnce(); } catch (e) { console.error("energyTick error", e); }
+    scheduleEnergy(); // re-read interval next time
+  }, s.energyIntervalMs);
+}
+
+async function scheduleHealth() {
+  const s = await getPollerSettings();
+  if (!s.healthEnabled) {
+    if (healthTimer) { clearTimeout(healthTimer); healthTimer = null; }
+    return;
+  }
+  if (healthTimer) clearTimeout(healthTimer);
+  healthTimer = setTimeout(async () => {
+    try { await healthTickOnce(); } catch (e) { console.error("healthTick error", e); }
+    scheduleHealth();
+  }, s.healthIntervalMs);
+}
+
+export async function startPollerSupervisor() {
+  const s = await getPollerSettings();
+  console.log(`[POLLER] Starting poller supervisor - Energy: ${s.energyEnabled ? s.energyIntervalMs + 'ms' : 'disabled'}, Health: ${s.healthEnabled ? s.healthIntervalMs + 'ms' : 'disabled'}`);
   
-  // Start energy polling
-  setInterval(energyTick, POLL_ENERGY_MS);
+  await scheduleEnergy();
+  await scheduleHealth();
   
-  // Start health polling  
-  setInterval(healthTick, POLL_HEALTH_MS);
-  
-  // Run initial ticks immediately
-  energyTick();
-  healthTick();
+  // simple watcher: if user toggles from disabled->enabled, we need to re-schedule
+  setInterval(() => { scheduleEnergy(); scheduleHealth(); }, 5000);
 }

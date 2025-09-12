@@ -1,0 +1,112 @@
+Add a PollerSupervisor that reads DB settings dynamically and schedules ticks without needing a server restart. Also add REST endpoints to get/set settings and to manually ping Tuya when a poller is disabled.
+
+Refactor server/jobs/poller.ts:
+
+Export single-run functions healthTickOnce() and energyTickOnce() that perform exactly one cycle using existing logic.
+
+Add a lightweight supervisor that reschedules based on DB settings.
+
+// server/jobs/poller.ts
+import { getPollerSettings } from "../storage.poller";
+// import your existing functions/utilities to fetch devices/status and write to DB
+
+let energyTimer: NodeJS.Timeout | null = null;
+let healthTimer: NodeJS.Timeout | null = null;
+
+export async function energyTickOnce(): Promise<{ ok: boolean; devices: number }> {
+  // existing energy loop body for one pass
+  // list devices -> normalize add_ele -> write RawEnergy
+  // return a small summary
+  return { ok: true, devices: /*count*/ 0 };
+}
+
+export async function healthTickOnce(): Promise<{ ok: boolean; devices: number }> {
+  // existing health loop body for one pass
+  // list devices -> status -> write RawHealth
+  return { ok: true, devices: /*count*/ 0 };
+}
+
+async function scheduleEnergy() {
+  const s = await getPollerSettings();
+  if (!s.energyEnabled) {
+    if (energyTimer) { clearTimeout(energyTimer); energyTimer = null; }
+    return; // no schedule while disabled
+  }
+  if (energyTimer) clearTimeout(energyTimer);
+  energyTimer = setTimeout(async () => {
+    try { await energyTickOnce(); } catch (e) { console.error("energyTick error", e); }
+    scheduleEnergy(); // re-read interval next time
+  }, s.energyIntervalMs);
+}
+
+async function scheduleHealth() {
+  const s = await getPollerSettings();
+  if (!s.healthEnabled) {
+    if (healthTimer) { clearTimeout(healthTimer); healthTimer = null; }
+    return;
+  }
+  if (healthTimer) clearTimeout(healthTimer);
+  healthTimer = setTimeout(async () => {
+    try { await healthTickOnce(); } catch (e) { console.error("healthTick error", e); }
+    scheduleHealth();
+  }, s.healthIntervalMs);
+}
+
+export async function startPollerSupervisor() {
+  await scheduleEnergy();
+  await scheduleHealth();
+  // simple watcher: if user toggles from disabled->enabled, we need to re-schedule
+  setInterval(() => { scheduleEnergy(); scheduleHealth(); }, 5000);
+}
+
+
+In your server bootstrap (e.g., server/index.ts), replace any old startPollers() with:
+
+import { startPollerSupervisor } from "./jobs/poller";
+startPollerSupervisor();
+
+
+Add routes server/routes/pollers.ts:
+
+// server/routes/pollers.ts
+import { Router } from "express";
+import { getPollerSettings, updatePollerSettings } from "../storage.poller";
+import { energyTickOnce, healthTickOnce } from "../jobs/poller";
+
+export const pollerRouter = Router();
+
+pollerRouter.get("/settings", async (_req, res) => {
+  const s = await getPollerSettings();
+  res.json(s);
+});
+
+pollerRouter.put("/settings", async (req, res) => {
+  const patch = req.body ?? {};
+  const s = await updatePollerSettings(patch);
+  res.json(s);
+});
+
+pollerRouter.post("/ping-now", async (req, res) => {
+  const type = (req.query.type as string) || (req.body?.type as string) || "health";
+  try {
+    const result =
+      type === "energy" ? await energyTickOnce() :
+      type === "health" ? await healthTickOnce() :
+      (() => { throw new Error("type must be 'energy' or 'health'"); })();
+    res.json({ ok: true, type, ...result });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "ping failed" });
+  }
+});
+
+
+Wire the router in server/index.ts (or your main Express file):
+
+import express from "express";
+import { pollerRouter } from "./routes/pollers";
+// ...
+app.use(express.json());
+app.use("/api/pollers", pollerRouter);
+
+
+END OF PROMPT

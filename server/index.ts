@@ -4,7 +4,7 @@ import compression from "compression";
 import { PrismaClient } from "@prisma/client";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { startPollers } from "./jobs/poller";
+import { startPollerSupervisor } from "./jobs/poller";
 import { startRollupScheduler } from "./jobs/rollups";
 import { startRetentionScheduler } from "./jobs/retention";
 
@@ -78,7 +78,7 @@ app.use((req, res, next) => {
   }
   
   // Start background pollers for data ingestion
-  startPollers();
+  startPollerSupervisor();
   
   // Start rollup scheduler for aggregating time-series data
   startRollupScheduler();
@@ -92,6 +92,11 @@ app.use((req, res, next) => {
 
     res.status(status).json({ message });
     throw err;
+  });
+
+  // Add API-scoped 404 handler to prevent Vite from capturing unmatched API requests
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ error: "API endpoint not found" });
   });
 
   // importantly only setup vite in development and after
