@@ -7,6 +7,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { startPollerSupervisor } from "./jobs/poller";
 import { startRollupScheduler } from "./jobs/rollups";
 import { startRetentionScheduler } from "./jobs/retention";
+import { ensureCounterRow } from "./storage.tuyaCounters";
 
 const prisma = new PrismaClient();
 
@@ -59,6 +60,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await ensureCounterRow();
   const server = await registerRoutes(app);
   
   // Seed default AppSettings if missing

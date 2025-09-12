@@ -50,7 +50,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/pollers", pollerRouter);
   
   // Mount Tuya counters API routes
-  app.use("/api/tuya-counters", tuyaCountersRouter);
+  app.use("/api/tuya/counters", tuyaCountersRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {

@@ -50,6 +50,6 @@ tuya.request = async (opts: any) => {
     noteTuyaCall(kind).catch(() => {});
     throw err;
   }
-} as any;
+};
 
 export { baseUrl };
