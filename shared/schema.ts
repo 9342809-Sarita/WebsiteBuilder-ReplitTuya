@@ -81,6 +81,18 @@ export const insertPollerSettingsSchema = createInsertSchema(pollerSettings).omi
   updatedAt: true,
 });
 
+// Tuya API counters table for tracking API usage
+export const tuyaCounters = pgTable("tuya_counters", {
+  id: text("id").primaryKey().$default(() => "singleton"),
+  total: integer("total").notNull().default(0),
+  devicesCount: integer("devices_count").notNull().default(0),
+  statusCount: integer("status_count").notNull().default(0),
+  logsCount: integer("logs_count").notNull().default(0),
+  sinceReset: integer("since_reset").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).defaultNow(),
+  lastPingAt: timestamp("last_ping_at", { withTimezone: true }),
+});
+
 // Types
 export type DeviceSpec = typeof deviceSpecs.$inferSelect;
 export type InsertDeviceSpec = z.infer<typeof insertDeviceSpecSchema>;
@@ -88,3 +100,4 @@ export type DeviceSettings = typeof deviceSettings.$inferSelect;
 export type InsertDeviceSettings = z.infer<typeof insertDeviceSettingsSchema>;
 export type PollerSettings = typeof pollerSettings.$inferSelect;
 export type InsertPollerSettings = z.infer<typeof insertPollerSettingsSchema>;
+export type TuyaCounters = typeof tuyaCounters.$inferSelect;

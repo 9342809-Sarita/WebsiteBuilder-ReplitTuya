@@ -1,5 +1,6 @@
 import { TuyaContext } from "@tuya/tuya-connector-nodejs";
 import { getPollerSettings } from "./storage.poller";
+import { noteTuyaCall, type TuyaCallKind } from "./storage.tuyaCounters";
 
 // Initialize Tuya client with environment variables
 const baseUrl = process.env.TUYA_ENDPOINT || "https://openapi.tuyain.com";
@@ -18,7 +19,7 @@ const baseTuya = new TuyaContext({
   secretKey 
 });
 
-// Create wrapper that enforces master kill switch
+// Create wrapper that enforces master kill switch and tracks API calls
 export const tuya = {
   async request(options: any) {
     // Check master kill switch before any Tuya API call
@@ -32,6 +33,25 @@ export const tuya = {
         t: Date.now(),
         masterKillSwitchEnabled: true
       };
+    }
+    
+    // Determine API call type for tracking
+    let callKind: TuyaCallKind = "other";
+    if (options.path?.includes("/devices")) {
+      if (options.path.includes("/status")) {
+        callKind = "status";
+      } else if (options.path.includes("/logs")) {
+        callKind = "logs";
+      } else {
+        callKind = "devices";
+      }
+    }
+    
+    // Track the API call
+    try {
+      await noteTuyaCall(callKind);
+    } catch (error) {
+      console.warn("[TUYA] Failed to track API call:", error);
     }
     
     // Proceed with actual Tuya API call if kill switch is off

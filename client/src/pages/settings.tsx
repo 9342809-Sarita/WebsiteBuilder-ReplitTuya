@@ -183,6 +183,7 @@ export default function SettingsPage() {
         </button>
         <span className="text-sm">{msg}</span>
       </div>
+      </div>
     </PageLayout>
   );
 }

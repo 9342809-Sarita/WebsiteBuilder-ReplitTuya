@@ -16,6 +16,7 @@ import appSettingsRouter from "./routes/app-settings";
 import debugRouter from "./routes/debug";
 import { pollerRouter } from "./routes/pollers";
 import { getPollerSettings } from "./storage.poller";
+import { tuyaCountersRouter } from "./routes/tuya-counters";
 
 const prisma = new PrismaClient();
 
@@ -47,6 +48,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Mount poller control API routes
   app.use("/api/pollers", pollerRouter);
+  
+  // Mount Tuya counters API routes
+  app.use("/api/tuya-counters", tuyaCountersRouter);
   
   // Health check endpoint
   app.get("/api/health", (_req, res) => {
