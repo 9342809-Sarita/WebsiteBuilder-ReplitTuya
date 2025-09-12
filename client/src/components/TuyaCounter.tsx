@@ -14,11 +14,20 @@ export default function TuyaCounter({ refreshMs = 5000 }: { refreshMs?: number }
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [prev, setPrev] = useState<{ t: number; total: number } | null>(null);
+  const [rate, setRate] = useState<string>("");
 
   async function load() {
     setLoading(true);
     const r = await fetch("/api/tuya/counters");
-    const j = await r.json();
+    const j: Snapshot = await r.json();
+    const now = Date.now();
+    if (prev) {
+      const dtMin = Math.max((now - prev.t) / 60000, 0.001);
+      const d = Math.max(j.total - prev.total, 0);
+      setRate(`${(d / dtMin).toFixed(1)} / min`);
+    }
+    setPrev({ t: now, total: j.total });
     setSnap(j);
     setLoading(false);
   }
@@ -44,6 +53,7 @@ export default function TuyaCounter({ refreshMs = 5000 }: { refreshMs?: number }
     <div className="rounded-xl border p-3 flex flex-col gap-2 w-full md:w-auto">
       <div className="text-sm font-semibold">Tuya API Pings</div>
       <div className="text-2xl font-bold">{snap.total.toLocaleString()}</div>
+      {rate && <div className="text-sm text-muted-foreground">{rate}</div>}
       <div className="text-xs opacity-80">
         <div>Devices list: {snap.devicesCount}</div>
         <div>Status: {snap.statusCount}</div>
