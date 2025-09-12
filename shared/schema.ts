@@ -69,7 +69,9 @@ export const pollerSettings = pgTable("poller_settings", {
   energyIntervalMs: integer("energy_interval_ms").notNull().default(300000), // 5 min
   healthEnabled: boolean("health_enabled").notNull().default(true),
   healthIntervalMs: integer("health_interval_ms").notNull().default(30000),  // 30 s
+  dashboardRefreshEnabled: boolean("dashboard_refresh_enabled").notNull().default(true),
   dashboardRefreshMs: integer("dashboard_refresh_ms").notNull().default(10000), // 10 s
+  masterKillSwitch: boolean("master_kill_switch").notNull().default(false), // Master switch to disable all Tuya traffic
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
