@@ -386,7 +386,7 @@ export default function ChartsPage() {
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="hour" />
                                   <YAxis />
-                                  <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kWh`, 'Energy']} />
+                                  <Tooltip formatter={(value) => [`${value} kWh`, 'Energy']} />
                                   <Bar dataKey="kwh" fill="#8884d8" />
                                 </BarChart>
                               </ResponsiveContainer>
@@ -422,7 +422,7 @@ export default function ChartsPage() {
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="day" />
                                   <YAxis />
-                                  <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kWh`, 'Energy']} />
+                                  <Tooltip formatter={(value) => [`${value} kWh`, 'Energy']} />
                                   <Bar dataKey="kwh" fill="#82ca9d" />
                                 </BarChart>
                               </ResponsiveContainer>
@@ -461,7 +461,7 @@ export default function ChartsPage() {
                                   <CartesianGrid strokeDasharray="3 3" />
                                   <XAxis dataKey="month" />
                                   <YAxis />
-                                  <Tooltip formatter={(value) => [`${Number(value).toFixed(2)} kWh`, 'Energy']} />
+                                  <Tooltip formatter={(value) => [`${value} kWh`, 'Energy']} />
                                   <Bar dataKey="kwh" fill="#ffc658" />
                                 </BarChart>
                               </ResponsiveContainer>

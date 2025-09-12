@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, varchar, text, timestamp, serial, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, serial, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 // Tuya device schema
@@ -62,28 +62,8 @@ export const insertDeviceSettingsSchema = createInsertSchema(deviceSettings).omi
   updatedAt: true,
 });
 
-// App settings schema for global application configuration
-export const appSettings = pgTable("app_settings", {
-  id: serial("id").primaryKey(),
-  pfSource: varchar("pf_source", { length: 16 }).notNull().default("calculated"),
-  pollEnergyMs: integer("poll_energy_ms").notNull().default(300000), // 5 minutes
-  pollHealthMs: integer("poll_health_ms").notNull().default(30000),  // 30 seconds
-  apiCallsEnabled: boolean("api_calls_enabled").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Insert schema for app settings
-export const insertAppSettingsSchema = createInsertSchema(appSettings).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
 // Types
 export type DeviceSpec = typeof deviceSpecs.$inferSelect;
 export type InsertDeviceSpec = z.infer<typeof insertDeviceSpecSchema>;
 export type DeviceSettings = typeof deviceSettings.$inferSelect;
 export type InsertDeviceSettings = z.infer<typeof insertDeviceSettingsSchema>;
-export type AppSettings = typeof appSettings.$inferSelect;
-export type InsertAppSettings = z.infer<typeof insertAppSettingsSchema>;
