@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pgTable, varchar, text, timestamp, serial, boolean } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, timestamp, serial, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 
 // Tuya device schema
@@ -62,8 +62,27 @@ export const insertDeviceSettingsSchema = createInsertSchema(deviceSettings).omi
   updatedAt: true,
 });
 
+// Poller settings schema for global polling configuration
+export const pollerSettings = pgTable("poller_settings", {
+  id: text("id").primaryKey().$default(() => "singleton"),
+  energyEnabled: boolean("energy_enabled").notNull().default(true),
+  energyIntervalMs: integer("energy_interval_ms").notNull().default(300000), // 5 min
+  healthEnabled: boolean("health_enabled").notNull().default(true),
+  healthIntervalMs: integer("health_interval_ms").notNull().default(30000),  // 30 s
+  dashboardRefreshMs: integer("dashboard_refresh_ms").notNull().default(10000), // 10 s
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// Insert schema for poller settings
+export const insertPollerSettingsSchema = createInsertSchema(pollerSettings).omit({
+  id: true,
+  updatedAt: true,
+});
+
 // Types
 export type DeviceSpec = typeof deviceSpecs.$inferSelect;
 export type InsertDeviceSpec = z.infer<typeof insertDeviceSpecSchema>;
 export type DeviceSettings = typeof deviceSettings.$inferSelect;
 export type InsertDeviceSettings = z.infer<typeof insertDeviceSettingsSchema>;
+export type PollerSettings = typeof pollerSettings.$inferSelect;
+export type InsertPollerSettings = z.infer<typeof insertPollerSettingsSchema>;

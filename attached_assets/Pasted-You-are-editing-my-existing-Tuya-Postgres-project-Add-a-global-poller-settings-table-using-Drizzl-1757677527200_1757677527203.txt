@@ -1,0 +1,78 @@
+You are editing my existing Tuya + Postgres project.
+Add a global poller settings table using Drizzle (we’re already using Drizzle for app config) and helpers to read/write it.
+
+Update shared/schema.ts — add a new table poller_settings:
+
+// shared/schema.ts
+import { pgTable, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+
+export const pollerSettings = pgTable("poller_settings", {
+  id: text("id").primaryKey().$default(() => "singleton"),
+  energyEnabled: boolean("energy_enabled").notNull().default(true),
+  energyIntervalMs: integer("energy_interval_ms").notNull().default(300000), // 5 min
+  healthEnabled: boolean("health_enabled").notNull().default(true),
+  healthIntervalMs: integer("health_interval_ms").notNull().default(30000),  // 30 s
+  dashboardRefreshMs: integer("dashboard_refresh_ms").notNull().default(10000), // 10 s
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+
+Update server/db.ts (or wherever Drizzle is initialized) to export these:
+
+// server/db.ts
+import { drizzle } from "drizzle-orm/neon-http"; // or your driver
+import { pollerSettings } from "../shared/schema";
+// ... existing setup
+export { pollerSettings };
+
+
+Add server/storage.poller.ts with helpers:
+
+// server/storage.poller.ts
+import { eq } from "drizzle-orm";
+import { db } from "./db"; // your drizzle db instance
+import { pollerSettings } from "../shared/schema";
+
+export type PollerSettings = {
+  energyEnabled: boolean;
+  energyIntervalMs: number;
+  healthEnabled: boolean;
+  healthIntervalMs: number;
+  dashboardRefreshMs: number;
+};
+
+const SINGLETON_ID = "singleton";
+
+export async function ensureDefaultPollerSettings(): Promise<void> {
+  const rows = await db.select().from(pollerSettings).where(eq(pollerSettings.id, SINGLETON_ID));
+  if (rows.length === 0) {
+    await db.insert(pollerSettings).values({ id: SINGLETON_ID }).returning();
+  }
+}
+
+export async function getPollerSettings(): Promise<PollerSettings> {
+  const [row] = await db.select().from(pollerSettings).where(eq(pollerSettings.id, SINGLETON_ID));
+  if (!row) {
+    await ensureDefaultPollerSettings();
+    return getPollerSettings();
+  }
+  return {
+    energyEnabled: !!row.energyEnabled,
+    energyIntervalMs: row.energyIntervalMs,
+    healthEnabled: !!row.healthEnabled,
+    healthIntervalMs: row.healthIntervalMs,
+    dashboardRefreshMs: row.dashboardRefreshMs,
+  };
+}
+
+export async function updatePollerSettings(patch: Partial<PollerSettings>): Promise<PollerSettings> {
+  await ensureDefaultPollerSettings();
+  await db
+    .update(pollerSettings)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(eq(pollerSettings.id, SINGLETON_ID));
+  return getPollerSettings();
+}
+
+
+Make sure the table is created. If you use migration files, create one for poller_settings with the same columns.
