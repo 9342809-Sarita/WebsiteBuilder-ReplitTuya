@@ -5,7 +5,9 @@ type PollerSettings = {
   energyIntervalMs: number;
   healthEnabled: boolean;
   healthIntervalMs: number;
+  dashboardRefreshEnabled: boolean;
   dashboardRefreshMs: number;
+  masterKillSwitch: boolean;
 };
 
 export default function SettingsPage() {
@@ -73,11 +75,9 @@ export default function SettingsPage() {
           <label className="block text-sm mb-1">Interval (seconds)</label>
           <input
             type="number"
-            min={5}
-            step={5}
             value={sec(settings.healthIntervalMs)}
             onChange={(e) =>
-              setSettings({ ...settings, healthIntervalMs: Math.max(5, Number(e.target.value)) * 1000 })
+              setSettings({ ...settings, healthIntervalMs: Number(e.target.value) * 1000 })
             }
             className="border rounded px-2 py-1 w-40"
           />
@@ -109,11 +109,9 @@ export default function SettingsPage() {
           <label className="block text-sm mb-1">Interval (minutes)</label>
           <input
             type="number"
-            min={1}
-            step={1}
             value={min(settings.energyIntervalMs)}
             onChange={(e) =>
-              setSettings({ ...settings, energyIntervalMs: Math.max(1, Number(e.target.value)) * 60000 })
+              setSettings({ ...settings, energyIntervalMs: Number(e.target.value) * 60000 })
             }
             className="border rounded px-2 py-1 w-40"
           />
@@ -132,19 +130,40 @@ export default function SettingsPage() {
       {/* Dashboard refresh */}
       <section className="p-4 rounded-xl border">
         <h2 className="text-lg font-medium">Live Dashboard Refresh</h2>
+        <label className="flex items-center gap-2 mt-2">
+          <input
+            type="checkbox"
+            checked={settings.dashboardRefreshEnabled}
+            onChange={(e) => setSettings({ ...settings, dashboardRefreshEnabled: e.target.checked })}
+          />
+          <span>Enabled</span>
+        </label>
+
         <div className="mt-3">
           <label className="block text-sm mb-1">Refresh interval (seconds)</label>
           <input
             type="number"
-            min={5}
-            step={5}
             value={sec(settings.dashboardRefreshMs)}
             onChange={(e) =>
-              setSettings({ ...settings, dashboardRefreshMs: Math.max(5, Number(e.target.value)) * 1000 })
+              setSettings({ ...settings, dashboardRefreshMs: Number(e.target.value) * 1000 })
             }
             className="border rounded px-2 py-1 w-40"
           />
         </div>
+      </section>
+
+      {/* Master Kill Switch */}
+      <section className="p-4 rounded-xl border border-red-200 bg-red-50">
+        <h2 className="text-lg font-medium text-red-700">Master Kill Switch</h2>
+        <p className="text-sm text-red-600 mt-1">Disables ALL Tuya API traffic when enabled</p>
+        <label className="flex items-center gap-2 mt-3">
+          <input
+            type="checkbox"
+            checked={settings.masterKillSwitch}
+            onChange={(e) => setSettings({ ...settings, masterKillSwitch: e.target.checked })}
+          />
+          <span className="font-medium">Disable all Tuya traffic</span>
+        </label>
       </section>
 
       <div className="flex items-center gap-3">
