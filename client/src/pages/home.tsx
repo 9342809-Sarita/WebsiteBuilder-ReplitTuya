@@ -338,7 +338,7 @@ export default function HomePage() {
                     <span className="text-sm font-medium">Voltage</span>
                   </div>
                   <span className="text-lg font-bold text-blue-600" data-testid={`voltage-${device.deviceId}`}>
-                    {device.online ? device.voltageV.toFixed(2) : '0.00'} V
+                    {device.online ? Number(device.voltageV).toFixed(2) : '0.00'} V
                   </span>
                 </div>
 

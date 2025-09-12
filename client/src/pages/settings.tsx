@@ -1,4 +1,5 @@
 import React from "react";
+import { PageLayout } from "@/components/page-layout";
 
 type PollerSettings = {
   energyEnabled: boolean;
@@ -56,8 +57,11 @@ export default function SettingsPage() {
   const min = (ms: number) => Math.round(ms / 60000);
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
-      <h1 className="text-2xl font-semibold">Polling Settings</h1>
+    <PageLayout 
+      title="Poller Settings"
+      subtitle="Configure data collection intervals and system controls"
+    >
+      <div className="max-w-2xl mx-auto space-y-6">
 
       {/* Health Poller */}
       <section className="p-4 rounded-xl border">
@@ -179,6 +183,6 @@ export default function SettingsPage() {
         </button>
         <span className="text-sm">{msg}</span>
       </div>
-    </div>
+    </PageLayout>
   );
 }

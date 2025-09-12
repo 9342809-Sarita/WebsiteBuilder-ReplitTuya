@@ -458,9 +458,9 @@ export default function MonitorPage() {
                         </span>
                       </td>
                       <td className="py-2 pr-4 font-mono text-xs text-gray-600 dark:text-gray-400">{row.deviceId}</td>
-                      <td className="py-2 pr-4 font-mono">{row.powerW ? row.powerW.toFixed(2) : "-"}</td>
-                      <td className="py-2 pr-4 font-mono">{row.voltageV ? row.voltageV.toFixed(2) : "-"}</td>
-                      <td className="py-2 pr-4 font-mono">{row.currentA ? row.currentA.toFixed(2) : "-"}</td>
+                      <td className="py-2 pr-4 font-mono">{row.powerW ? Number(row.powerW).toFixed(2) : "-"}</td>
+                      <td className="py-2 pr-4 font-mono">{row.voltageV ? Number(row.voltageV).toFixed(2) : "-"}</td>
+                      <td className="py-2 pr-4 font-mono">{row.currentA ? Number(row.currentA).toFixed(2) : "-"}</td>
                       <td className="py-2 pr-4 font-mono">{
                         // Show "—" if hasPf is explicitly false, otherwise prefer unified 'pf' field over legacy 'pfEst'
                         (() => {
@@ -471,7 +471,7 @@ export default function MonitorPage() {
                             : "—";
                         })()
                       }</td>
-                      <td className="py-2 pr-4 font-mono">{row.addEleKwh ? row.addEleKwh.toFixed(2) : "-"}</td>
+                      <td className="py-2 pr-4 font-mono">{row.addEleKwh ? Number(row.addEleKwh).toFixed(2) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
