@@ -16,6 +16,18 @@ pollerRouter.get("/settings", async (_req, res) => {
 pollerRouter.put("/settings", async (req, res) => {
   try {
     const patch = req.body ?? {};
+    
+    // Server-side validation to prevent runaway polling
+    if (patch.healthIntervalMs !== undefined && patch.healthIntervalMs < 5000) {
+      patch.healthIntervalMs = 5000; // Minimum 5 seconds
+    }
+    if (patch.energyIntervalMs !== undefined && patch.energyIntervalMs < 60000) {
+      patch.energyIntervalMs = 60000; // Minimum 1 minute
+    }
+    if (patch.dashboardRefreshMs !== undefined && patch.dashboardRefreshMs < 5000) {
+      patch.dashboardRefreshMs = 5000; // Minimum 5 seconds
+    }
+    
     const s = await updatePollerSettings(patch);
     res.json(s);
   } catch (error: any) {

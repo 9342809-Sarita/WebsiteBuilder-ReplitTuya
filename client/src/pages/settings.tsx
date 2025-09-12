@@ -75,9 +75,10 @@ export default function SettingsPage() {
           <label className="block text-sm mb-1">Interval (seconds)</label>
           <input
             type="number"
+            min="5"
             value={sec(settings.healthIntervalMs)}
             onChange={(e) =>
-              setSettings({ ...settings, healthIntervalMs: Number(e.target.value) * 1000 })
+              setSettings({ ...settings, healthIntervalMs: Math.max(5, Number(e.target.value)) * 1000 })
             }
             className="border rounded px-2 py-1 w-40"
           />
@@ -109,9 +110,10 @@ export default function SettingsPage() {
           <label className="block text-sm mb-1">Interval (minutes)</label>
           <input
             type="number"
+            min="1"
             value={min(settings.energyIntervalMs)}
             onChange={(e) =>
-              setSettings({ ...settings, energyIntervalMs: Number(e.target.value) * 60000 })
+              setSettings({ ...settings, energyIntervalMs: Math.max(1, Number(e.target.value)) * 60000 })
             }
             className="border rounded px-2 py-1 w-40"
           />
@@ -143,9 +145,10 @@ export default function SettingsPage() {
           <label className="block text-sm mb-1">Refresh interval (seconds)</label>
           <input
             type="number"
+            min="5"
             value={sec(settings.dashboardRefreshMs)}
             onChange={(e) =>
-              setSettings({ ...settings, dashboardRefreshMs: Number(e.target.value) * 1000 })
+              setSettings({ ...settings, dashboardRefreshMs: Math.max(5, Number(e.target.value)) * 1000 })
             }
             className="border rounded px-2 py-1 w-40"
           />

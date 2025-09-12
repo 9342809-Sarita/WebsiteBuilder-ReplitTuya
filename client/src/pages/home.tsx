@@ -109,6 +109,26 @@ export default function HomePage() {
     refetch();
   };
 
+  if (masterKillSwitch) {
+    return (
+      <PageLayout 
+        title="Dashboard"
+        subtitle="Live device monitoring with real-time Tuya data"
+      >
+        <Card className="shadow-sm border-red-200">
+          <CardContent className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <XCircle className="mx-auto h-12 w-12 text-red-500 mb-4" />
+              <p className="text-xl font-medium text-red-700 mb-2">Master Kill Switch Enabled</p>
+              <p className="text-red-600 mb-4">All Tuya API traffic has been disabled for safety.</p>
+              <p className="text-sm text-red-500">Go to Settings → Master Kill Switch to re-enable.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </PageLayout>
+    );
+  }
+
   if (error) {
     return (
       <PageLayout 
